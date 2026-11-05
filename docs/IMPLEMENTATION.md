@@ -6,7 +6,7 @@
 - [x] Add authenticated MCP tools, portable local support, evidence-backed records, and harness scheduling guidance.
 - [x] Build the website workspace and connection flow while preserving the public instructions/downloads.
 - [x] Verify real browser authentication, MCP/web shared records, isolation, permissions, export/deletion, and existing site behavior.
-- [ ] Publish the open-source implementation, deploy isolated resources, and verify the live experience.
+- [x] Publish the open-source implementation, deploy isolated resources, and verify the live experience.
 
 ## Constraints
 

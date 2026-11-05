@@ -84,6 +84,12 @@ async function api(request: Request, env: Env, path: string, server: OAuthAuthor
   if (path.startsWith("auth/")) return authRoute(request, env, path.slice(5));
   const user = await requireUser(request, env);
   const store = new WorkspaceStore(env.DB, user.id, "website");
+  if ((path === "import/preview" || path === "import/confirm") && request.method === "POST") {
+    const body = z.object({ snapshot: z.unknown(), confirmation: z.literal("IMPORT PREPARATION").optional(), expected_digest: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict().parse(await jsonBody(request, 4 * 1024 * 1024));
+    if (path === "import/preview") return Response.json({ preview: await store.previewImport(body.snapshot) });
+    if (body.confirmation !== "IMPORT PREPARATION" || !body.expected_digest) throw new HttpError(400, "Validate the file and explicitly confirm preparation import first.");
+    return Response.json({ imported: await store.importPreparation(body.snapshot, body.expected_digest) });
+  }
   if (path === "state" && request.method === "GET") {
     const grants = await server.getOAuthApi(env).listUserGrants(user.id, { limit: 30 });
     return Response.json({ user: { name: user.name, created_at: user.created_at }, usage: await store.usage(), records: await store.list(), reviews: await store.reviews(), outcomes: await store.outcomes(), connections: grants.items.map(grant => ({ id: grant.id, clientId: grant.clientId, scope: grant.scope, createdAt: grant.createdAt, current: grant.metadata?.epoch === user.epoch })) });

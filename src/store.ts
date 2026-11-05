@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { HttpError, publicJobUrl } from "./security.ts";
+import { hash, HttpError, publicJobUrl } from "./security.ts";
 
 export interface Statement {
   bind(...values: unknown[]): Statement;
@@ -54,8 +54,97 @@ function parseData(kind: Kind, input: unknown): Record<string, unknown> {
   return parsed.data;
 }
 
+const importSchema = z.object({
+  format: z.literal("job-search-workspace"), version: z.literal(1), exported_at: z.iso.datetime(), account: z.unknown().optional(),
+  records: z.array(z.object({ id: z.string().uuid(), kind: kindSchema, job_id: z.string().uuid().nullable(), data: z.unknown(), revision: z.number().int().positive(), created_at: z.iso.datetime(), updated_at: z.iso.datetime() }).strict()).min(1).max(250),
+  versions: z.array(z.unknown()).max(50000).optional(), reviews: z.array(z.unknown()).max(250).optional(), outcomes: z.array(z.unknown()).max(250).optional(), events: z.array(z.unknown()).max(200).optional(),
+}).strict();
+
+/** Untrusted snapshots are preparation only. Never restore authority, credentials, or owner IDs. */
+export async function prepareImport(input: unknown) {
+  const parsed = importSchema.safeParse(input);
+  if (!parsed.success) throw new HttpError(400, "Invalid version-1 workspace export. No records imported.");
+  const source = parsed.data;
+  const ids = new Map(source.records.map(record => [record.id, crypto.randomUUID()]));
+  if (ids.size !== source.records.length) throw new HttpError(400, "Duplicate record IDs in export.");
+  if (source.records.filter(record => record.kind === "profile").length > 1) throw new HttpError(400, "Export contains more than one profile.");
+  const timestamp = new Date().toISOString();
+  const records = source.records.map(record => ({ id: ids.get(record.id)!, kind: record.kind, job_id: record.job_id ? ids.get(record.job_id) ?? "" : null, data: parseData(record.kind, record.data), fingerprint: null as string | null, created_at: timestamp, updated_at: timestamp }));
+  const profile = records.find(record => record.kind === "profile");
+  const evidence = (profile?.data.evidence ?? []) as z.infer<typeof profileSchema>["evidence"];
+  const evidenceIds = new Set(evidence.map(item => item.id));
+  if (evidenceIds.size !== evidence.length) throw new HttpError(400, "Duplicate evidence IDs in export.");
+  evidence.forEach(item => { item.confirmed = false; });
+  const fingerprints = new Set<string>();
+  let bytes = 0;
+  const counts = { profile: 0, job: 0, assessment: 0, draft: 0, interview: 0, run: 0 };
+  for (const record of records) {
+    const linked = ["assessment", "draft", "interview"].includes(record.kind);
+    if (linked !== (record.job_id !== null)) throw new HttpError(400, "Invalid job link in export.");
+    if (linked) {
+      const job = records.find(job => job.id === record.job_id && job.kind === "job");
+      if (!job) throw new HttpError(400, "Export references a missing job. Import a complete preparation snapshot.");
+      const cited = record.kind === "assessment" ? (record.data.requirements as { evidence_ids: string[] }[]).flatMap(item => item.evidence_ids) : record.data.evidence_ids as string[];
+      if (cited.some(id => !evidenceIds.has(id))) throw new HttpError(400, "Export references missing profile evidence. Correct the snapshot or remove stale preparation records from a private copy before importing.");
+      if (record.kind === "assessment" && (record.data.requirements as { posting_quote: string }[]).some(item => !String(job.data.posting).includes(item.posting_quote))) throw new HttpError(400, "Assessment quote is absent from the exported posting.");
+      // A fresh review/save against the imported profile is required, even if source revisions matched.
+      record.data.profile_id = null; record.data.profile_revision = 1;
+    }
+    if (record.kind === "profile") record.fingerprint = "profile";
+    if (record.kind === "job") {
+      record.data.source_url = publicJobUrl(record.data.source_url as string);
+      record.fingerprint = `${String(record.data.company).normalize("NFKC").trim().toLowerCase()}|${record.data.source_url}`;
+    }
+    if (record.kind === "run") {
+      record.fingerprint = record.data.run_key as string;
+      record.data.source_urls = (record.data.source_urls as string[]).map(publicJobUrl);
+    }
+    if (record.fingerprint) {
+      const key = `${record.kind}:${record.fingerprint}`;
+      if (fingerprints.has(key)) throw new HttpError(400, "Duplicate job, profile or run in export.");
+      fingerprints.add(key);
+    }
+    const size = new TextEncoder().encode(JSON.stringify(record.data)).byteLength;
+    if (size > 65536) throw new HttpError(413, "Imported record exceeds 64 KiB.");
+    bytes += size; counts[record.kind]++;
+  }
+  if (bytes > 2097152) throw new HttpError(413, "Imported preparation exceeds 2 MiB.");
+  return { records, summary: { digest: await hash(JSON.stringify(input)), record_count: records.length, counts, bytes, unconfirmed_evidence: evidence.length,
+    not_restored: { versions: source.versions?.length ?? 0, reviews: source.reviews?.length ?? 0, outcomes: source.outcomes?.length ?? 0, events: source.events?.length ?? 0 },
+    warnings: ["Preparation only: no credentials, confirmations, approvals, submissions, outcomes, old history or activity are restored.", "New IDs and revision 1 are assigned. Evidence is unconfirmed; reassess and save dependent materials before approval.", "Keep the original export privately if you need its historical assertions. Nothing is sent to employers or scheduled."] } };
+}
+
 export class WorkspaceStore {
   constructor(readonly db: SqlDatabase, readonly userId: string, readonly actor: Actor) {}
+  async previewImport(input: unknown) {
+    if (this.actor !== "website") throw new HttpError(403, "Import requires the candidate on the website.");
+    if ((await this.usage()).records) throw new HttpError(409, "Import requires an empty workspace. Existing records are never merged or overwritten.");
+    return (await prepareImport(input)).summary;
+  }
+  async importPreparation(input: unknown, expectedDigest: string) {
+    if (this.actor !== "website") throw new HttpError(403, "Import requires the candidate on the website.");
+    const prepared = await prepareImport(input);
+    if (prepared.summary.digest !== expectedDigest) throw new HttpError(409, "Import file changed. Validate it again before confirming.");
+    // D1 caps any individual string at 2,000,000 bytes. Keep each JSON binding well below
+    // that even when preparation plus wrapper metadata approaches the 2 MiB workspace quota.
+    const chunks: string[] = []; let chunk: typeof prepared.records = [], chunkBytes = 2;
+    for (const record of prepared.records) {
+      const bytes = new TextEncoder().encode(JSON.stringify(record)).byteLength + 1;
+      if (chunk.length && chunkBytes + bytes > 256 * 1024) { chunks.push(JSON.stringify(chunk)); chunk = []; chunkBytes = 2; }
+      chunk.push(record); chunkBytes += bytes;
+    }
+    if (chunk.length) chunks.push(JSON.stringify(chunk));
+    // One atomic INSERT SELECT: the uncorrelated subquery is evaluated once, before any rows insert.
+    // A racing write or another import cannot turn this into a merge or a partial import.
+    const result = await this.db.prepare(`WITH chunks(json) AS (VALUES ${chunks.map(() => "(?)").join(",")}),
+      imported(value) AS MATERIALIZED (SELECT item.value FROM chunks,json_each(chunks.json) AS item)
+      INSERT INTO records(id,user_id,kind,job_id,fingerprint,data,revision,created_at,updated_at)
+      SELECT json_extract(value,'$.id'),?,json_extract(value,'$.kind'),json_extract(value,'$.job_id'),json_extract(value,'$.fingerprint'),json_extract(value,'$.data'),1,json_extract(value,'$.created_at'),json_extract(value,'$.updated_at')
+      FROM imported WHERE NOT EXISTS(SELECT 1 FROM records WHERE user_id=?)`).bind(...chunks, this.userId, this.userId).run();
+    if (!result.meta.changes) throw new HttpError(409, "Import requires an empty workspace. Refresh before continuing.");
+    await this.event("import_preparation");
+    return prepared.summary;
+  }
   async list(kind?: Kind): Promise<RecordRow[]> {
     const query = `SELECT id,kind,job_id,data,revision,created_at,updated_at FROM records WHERE user_id=?${kind ? " AND kind=?" : ""} ORDER BY created_at DESC,id LIMIT 250`;
     const statement = this.db.prepare(query).bind(this.userId, ...(kind ? [kind] : []));

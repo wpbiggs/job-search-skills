@@ -100,9 +100,46 @@ function privacyView(): string {
   return `<section class="box" aria-labelledby="storage-heading"><h2 id="storage-heading">Storage &amp; all records</h2><p id="storage-usage">${usage.records} / ${usage.record_limit} records · ${kib(usage.total_bytes)} / ${kib(usage.byte_limit)}</p><p class="muted">Current content: ${kib(usage.current_bytes)}. Preserved history: ${kib(usage.history_bytes)} across ${usage.historical_versions} versions. These quotas cover preparation content, not authentication or review metadata.</p><p>Export before deleting if you need a private copy. Deleting a record removes its preserved versions; deleting a job also removes linked preparation, reviews and outcomes. Other records may still quote that information. Removing evidence from your current profile alone does not erase it from history or drafts.</p>${state!.records.length ? `<label for="record-filter">Filter records by type</label><select id="record-filter"><option value="all">All records</option>${["profile", "job", "assessment", "draft", "interview", "run"].map(kind => `<option value="${kind}">${kind}</option>`).join("")}</select><div id="managed-records">${state!.records.map(record => `<article class="record" data-managed-kind="${record.kind}" data-managed-id="${record.id}"><h3>${esc(record.kind)}: ${esc(record.data.title ?? record.data.type ?? record.data.run_key ?? "Career profile")}</h3><small>Version ${record.revision} · ${esc(record.updated_at)}</small><details><summary>Inspect saved content</summary><pre>${esc(JSON.stringify(record.data, null, 2))}</pre></details><details data-history="${record.id}"><summary>Inspect preserved history</summary><div></div></details><button class="secondary" data-delete="${record.id}">Delete ${esc(record.kind)} record</button></article>`).join("")}</div>` : '<p class="muted">No preparation records saved.</p>'}</section>${privacyDetailsView()}`;
 }
 function privacyDetailsView(): string {
+  return `${importView()}${privacyPolicyView()}`;
+}
+function importView(): string {
+  return `<section class="box" aria-labelledby="import-heading"><h2 id="import-heading">Import preparation from an export</h2><p>Transfer current preparation records from a local or hosted version-1 JSON export into an <strong>empty workspace only</strong>. Existing content is never merged or overwritten. Keep your original export privately: old history, reviews, submission/outcome assertions, activity and credentials will not be restored.</p><p>All imported evidence becomes unconfirmed. Materials need fresh review before approval. This does not contact employers, connect an assistant, or start a schedule.</p>${state!.records.length ? '<p class="muted">Import is unavailable while this workspace has records. Use a separate empty workspace, or export and deliberately delete existing records first. Do not delete content just to test import.</p>' : '<label for="import-file">Choose a private workspace export (JSON, at most 4 MiB)</label><input id="import-file" type="file" accept="application/json,.json"><p id="import-local" class="muted">Selecting a file only reads it in this browser. Nothing is uploaded until you choose Validate.</p><label class="check"><input id="import-consent" type="checkbox"><span>I authorize uploading this file to this workspace service for validation and, only after my separate confirmation, storing its preparation records. I understand this is not a full historical restore.</span></label><button id="import-validate" class="secondary">Validate file in my workspace</button><div id="import-preview" role="status"></div><button id="import-confirm" hidden>Import reviewed preparation</button>'}</section>`;
+}
+function privacyPolicyView(): string {
   return `<section class="box"><h2>Private, not invisible to the host</h2><p>Profile, job, draft, review, and activity records are stored in a dedicated Cloudflare D1 database. Passkey public keys and hashed recovery/session credentials are stored for authentication; OAuth client grants live in a separate namespace. We do not store your passkey private key or biometric data.</p><p>This is not end-to-end encrypted storage: hosting administrators can access records. Connected assistants can read only the scopes you approve, but their providers have separate processing and retention policies. No inference runs here, and no employer receives anything from this service.</p><p>Keep secrets, government IDs, financial information, and confidential employer documents out. Limits: 250 records, 64 KiB per record, 2 MiB total. Up to 200 minimal activity events are retained; they do not contain draft bodies.</p><div class="actions"><a class="button" href="/job-search/api/export" download="job-search-workspace.json">Export my workspace</a><button id="add-passkey" class="secondary">Add another passkey</button></div><p class="muted">An export contains personal data. Save it privately. It excludes authentication credentials and tokens. Passkeys are specific to this site; a self-hosted deployment needs its own passkeys.</p></section><section class="box"><h2>Delete a record</h2><p>You can delete a job and its related records, or an individual draft or interview note, under Jobs &amp; drafts. Export first if you want to keep a copy.</p></section><section class="box"><h2>Activity you can inspect</h2><div id="activity"><p class="muted">Loading activity…</p></div></section><section class="box"><h2>Delete my workspace</h2><p>Deletes the active profile, jobs, drafts, reviews, activity, passkeys, recovery code, and sessions. Assistant access is revoked. This cannot erase exports or copies held by your assistant; hosting backups may persist for their retention period.</p><button id="delete-workspace" class="danger">Delete my entire workspace</button><p><a href="https://github.com/wpbiggs/job-search-skills/blob/main/docs/HOSTED_WORKSPACE.md">Full storage, retention, and self-hosting details ↗</a></p></section>`;
 }
 function wireSection() {
+  const importFile = document.querySelector<HTMLInputElement>("#import-file");
+  if (importFile) {
+    let snapshot: unknown;
+    let preview: Awaited<ReturnType<WorkspaceStore["previewImport"]>> | undefined;
+    const output = document.querySelector<HTMLDivElement>("#import-preview")!;
+    const confirm = document.querySelector<HTMLButtonElement>("#import-confirm")!;
+    importFile.addEventListener("change", () => void busy(async () => {
+      snapshot = undefined; preview = undefined; confirm.hidden = true; output.textContent = "";
+      const file = importFile.files?.[0]; if (!file) return;
+      if (file.size > 4 * 1024 * 1024) throw new Error("Export exceeds the 4 MiB import limit.");
+      try { snapshot = JSON.parse(await file.text()); } catch { throw new Error("This file is not valid JSON. No content was uploaded."); }
+      document.querySelector("#import-local")!.textContent = `${file.size.toLocaleString()} bytes read locally. Review the disclosure, then Validate to upload for server checks. Nothing has been stored.`;
+    }));
+    document.querySelector<HTMLButtonElement>("#import-validate")!.onclick = () => void busy(async () => {
+      preview = undefined; confirm.hidden = true; output.textContent = "";
+      if (!snapshot || !checked("import-consent")) throw new Error("Choose a JSON file and authorize validation before uploading.");
+      const current = snapshot;
+      const result = await api<{ preview: Awaited<ReturnType<WorkspaceStore["previewImport"]>> }>("import/preview", "POST", { snapshot: current });
+      if (snapshot !== current) return;
+      preview = result.preview;
+      const summary = document.createElement("pre");
+      summary.textContent = `Ready for your review: ${preview.record_count} records, ${(preview.bytes / 1024).toFixed(1)} KiB.\n${Object.entries(preview.counts).map(([kind, count]) => `${kind}: ${count}`).join(" · ")}\nEvidence requiring confirmation: ${preview.unconfirmed_evidence}\nNot restored: ${JSON.stringify(preview.not_restored)}\n\n${preview.warnings.join("\n")}`;
+      output.append(summary); confirm.hidden = false;
+    });
+    confirm.onclick = () => void busy(async () => {
+      if (!snapshot || !preview || !checked("import-consent")) throw new Error("Validate the file and review the disclosure first.");
+      if (!window.confirm(`Import ${preview.record_count} preparation records into this empty workspace? Evidence becomes unconfirmed; history, reviews, outcomes, submissions and credentials are NOT restored. Nothing will be submitted or scheduled.`)) return;
+      await api("import/confirm", "POST", { snapshot, expected_digest: preview.digest, confirmation: "IMPORT PREPARATION" });
+      await refresh(); message("Preparation imported with fresh IDs. Confirm your evidence and recheck materials. Old approvals, submissions and outcomes were not restored.");
+    });
+  }
   document.querySelectorAll("[data-managed-kind] h3").forEach(heading => heading.classList.add("wrap"));
   if (tab === "jobs") {
     const assessments = state!.records.filter(record => record.kind === "assessment" && record.job_id === selectedJob);

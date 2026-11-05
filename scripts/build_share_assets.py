@@ -13,7 +13,7 @@ SKILLS = (
 FILES = (
     "START_HERE.md", "AGENTS.md", "LICENSE", "templates/profile.md",
     "templates/resume.md", "docs/browser-integrations.md",
-    "docs/privacy-and-safety.md", "docs/MCP.md", "docs/HOSTED_WORKSPACE.md",
+    "docs/privacy-and-safety.md", "docs/MCP.md", "docs/HOSTED_WORKSPACE.md", "docs/PORTABILITY.md",
 ) + tuple(f"skills/{name}/SKILL.md" for name in SKILLS)
 
 
@@ -23,7 +23,7 @@ def build(output):
     sections = [(ROOT / "START_HERE.md").read_text(encoding="utf-8")]
     for name in ("AGENTS.md", *(f"skills/{skill}/SKILL.md" for skill in SKILLS),
                  "templates/profile.md", "templates/resume.md", "docs/browser-integrations.md",
-                 "docs/privacy-and-safety.md", "docs/MCP.md", "docs/HOSTED_WORKSPACE.md"):
+                 "docs/privacy-and-safety.md", "docs/MCP.md", "docs/HOSTED_WORKSPACE.md", "docs/PORTABILITY.md"):
         sections.append(f"\n---\n\n## Reference: {name}\n\n" + (ROOT / name).read_text(encoding="utf-8"))
     (output / "guide.md").write_text("\n".join(sections), encoding="utf-8")
     with zipfile.ZipFile(output / "job-search-skills.zip", "w", compression=zipfile.ZIP_DEFLATED) as archive:

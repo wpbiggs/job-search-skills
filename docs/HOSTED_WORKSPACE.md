@@ -44,7 +44,7 @@ Candidate-only website actions include evidence confirmation, draft/destination 
 
 Exports are JSON with `format: "job-search-workspace"`, `version: 1`, `exported_at`, `account`, `records`, `versions`, `reviews`, `outcomes`, and `events`. Each current record has `id`, `kind`, `job_id`, `data`, `revision`, and timestamps. Evidence has explicit source and confirmation flags. Job records retain source URL, original posting, and the reported checked date. New draft/assessment/interview writes carry both the profile ID and revision used. Older records without a profile ID need a refreshed version before approval against an existing profile; their old history remains readable. No schema migration or rewriting historical content is required for this additive field.
 
-Record and owner IDs are not credentials. Never import an old export's approval or submission assertions as new authorization. There is no automatic import/sync in this release; the format and SQLite adapter allow a candidate or developer to migrate content with explicit review. Authentication credentials are deliberately nonportable; create new passkeys on a new deployment.
+Record and owner IDs are not credentials. A candidate-reviewed [preparation import](PORTABILITY.md) is available on the website and through a separate candidate-run local CLI, only into an empty workspace. It assigns new IDs, resets evidence confirmation, and imports current preparation without restoring old history, reviews, submissions, outcomes, activity or credentials. This is not a full account/historical restore. There is no automatic synchronization. Authentication credentials are deliberately nonportable; create new passkeys on a new deployment and separately authorize any assistant connections.
 
 ## Self-host
 

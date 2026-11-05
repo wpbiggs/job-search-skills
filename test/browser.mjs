@@ -181,6 +181,43 @@ try {
   assert.doesNotMatch(JSON.stringify(exported), /recovery_hash|public_key|token_hash|access_token|refresh_token/);
   results.push("Desktop/mobile no overflow, portable export without security credentials");
 
+  const tokenImport = await fetch(`${origin}/job-search/api/import/preview`, { method: "POST", headers: { Authorization: `Bearer ${connection.tokens.access_token}`, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ snapshot: exported }) });
+  assert.equal(tokenImport.status, 401, "MCP tokens must not authorize candidate import");
+  await other.page.getByRole("button", { name: "Activity & privacy", exact: true }).click();
+  await other.page.getByRole("heading", { name: "Import preparation from an export", exact: true }).waitFor();
+  let importRequests = 0;
+  other.page.on("request", request => { if (request.url().includes("/api/import/")) importRequests++; });
+  await other.page.locator("#import-file").setInputFiles({ name: "fictional-export.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(exported)) });
+  await other.page.getByText(/bytes read locally/).waitFor();
+  assert.equal(importRequests, 0, "Selecting a file must not upload it");
+  assert.equal(await other.page.getByRole("button", { name: "Import reviewed preparation", exact: true }).isVisible(), false);
+  await other.page.locator("#import-consent").check();
+  await other.page.getByRole("button", { name: "Validate file in my workspace", exact: true }).click();
+  await other.page.getByText(/Ready for your review:/).waitFor();
+  assert.equal((await webApi(other.page, "state")).body.records.length, 0, "Preview must not store preparation");
+  other.page.once("dialog", dialog => dialog.accept());
+  await other.page.getByRole("button", { name: "Import reviewed preparation", exact: true }).click();
+  await other.page.getByText("Import is unavailable while this workspace has records.", { exact: false }).waitFor();
+  const importedState = (await webApi(other.page, "state")).body;
+  assert.equal(importedState.records.length, exported.records.length);
+  assert.deepEqual(importedState.reviews, []);
+  assert.deepEqual(importedState.outcomes, []);
+  assert.equal(importedState.usage.historical_versions, 0);
+  const importedProfile = importedState.records.find(record => record.kind === "profile");
+  const importedJob = importedState.records.find(record => record.kind === "job");
+  const importedDraft = importedState.records.find(record => record.kind === "draft");
+  assert.equal(importedProfile.data.evidence.every(item => item.confirmed === false), true);
+  assert.equal(importedDraft.job_id, importedJob.id);
+  assert.equal(importedState.records.some(record => exported.records.some(source => source.id === record.id)), false);
+  const repeatedImport = await webApi(other.page, "import/preview", "POST", { snapshot: exported });
+  assert.equal(repeatedImport.status, 409);
+  const freshReview = await webApi(other.page, "review", "POST", { job_id: importedJob.id, review: { action: "approved", draft_id: importedDraft.id, draft_revision: 1, destination: importedJob.data.source_url, confirmation: "Cannot restore old authority" } });
+  assert.equal(freshReview.status, 409);
+  const importedMcp = decoded(await readOnly.client.callTool({ name: "get_record", arguments: { id: importedDraft.id } }));
+  assert.equal(importedMcp.data.content, importedDraft.data.content);
+  assert.equal((await readOnly.client.callTool({ name: "get_record", arguments: { id: draft.id } })).isError, true);
+  results.push("Candidate-authorized file validation/import is atomic and shared with MCP; selection alone does not upload; authority/history not restored");
+
   await alice.page.getByRole("heading", { name: "Storage & all records", exact: true }).waitFor();
   for (const width of [1440, 390]) {
     await alice.page.setViewportSize({ width, height: 1000 });
@@ -237,6 +274,20 @@ try {
   await alice.page.getByRole("button", { name: "Sign in with a passkey" }).click();
   await alice.page.getByRole("navigation", { name: "Workspace sections" }).waitFor();
   results.push("Real passkey reauthentication restores persisted records");
+
+  if (new URL(origin).hostname === "localhost") {
+    // Exercise large/multi-binding imports in workerd without repeatedly filling production storage.
+    for (const record of importedState.records) await webApi(other.page, `records/${record.id}`, "DELETE", { confirmation: "DELETE RECORD", expected_revision: record.revision });
+    const sourceJob = exported.records.find(record => record.kind === "job");
+    const bulk = { ...exported, records: Array.from({ length: 46 }, (_, index) => ({ ...sourceJob, id: crypto.randomUUID(), data: { ...sourceJob.data, source_url: `https://example.com/jobs/local-bulk-${index}`, posting: "x".repeat(45000) } })) };
+    const preview = await webApi(other.page, "import/preview", "POST", { snapshot: bulk });
+    assert.equal(preview.status, 200);
+    assert.ok(preview.body.preview.bytes > 2_000_000);
+    const confirmed = await webApi(other.page, "import/confirm", "POST", { snapshot: bulk, expected_digest: preview.body.preview.digest, confirmation: "IMPORT PREPARATION" });
+    assert.equal(confirmed.status, 200);
+    assert.equal((await webApi(other.page, "state")).body.records.length, 46);
+    results.push("Local workerd imports all 46 records near the 2 MiB quota across bounded D1 JSON bindings");
+  }
 
   const refreshResponse = await fetch(`${origin}/job-search/oauth/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "refresh_token", client_id: connection.clientId, refresh_token: connection.tokens.refresh_token, resource: endpoint }) });
   assert.equal(refreshResponse.status, 200);

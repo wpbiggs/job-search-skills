@@ -97,6 +97,8 @@ Configure the client to execute `node` directly with an absolute script path, `-
 
 Add `--read-only` to omit write tools. The SQLite database is local, owner-readable, and ignored by Git. Local filesystem/process permissions are the trust boundary; stdio does not use hosted OAuth or passkeys. The assistant's model may still process retrieved content externally. Local and hosted workspaces are **separate stores**; there is no silent synchronization. `export_workspace` emits the same documented JSON format in either mode. No local browser review UI is bundled; candidate-only review tools are not exposed over stdio.
 
+Candidates can explicitly move current preparation to an empty hosted/self-hosted or local destination using the [portability guide](PORTABILITY.md). Import is **not an MCP tool**. Old approvals, outcomes, history and credentials are not restored, and evidence becomes unconfirmed. Do not run the local candidate importer without the user's exact file/destination approval or use it to bypass hosted candidate-only controls.
+
 ## Protocol support and limits
 
 - The server uses the official MCP SDK with OAuth 2.1 authorization-code/S256 PKCE, resource-bound tokens, explicit per-client consent, refresh, and revocation.

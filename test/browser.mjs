@@ -181,6 +181,57 @@ try {
   assert.doesNotMatch(JSON.stringify(exported), /recovery_hash|public_key|token_hash|access_token|refresh_token/);
   results.push("Desktop/mobile no overflow, portable export without security credentials");
 
+  await alice.page.getByRole("heading", { name: "Storage & all records", exact: true }).waitFor();
+  for (const width of [1440, 390]) {
+    await alice.page.setViewportSize({ width, height: 1000 });
+    assert.equal(await alice.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, "Record management must not overflow on mobile");
+  }
+  const beforeManagement = (await webApi(alice.page, "state")).body;
+  const mcpUsage = decoded(await connection.client.callTool({ name: "workspace_info", arguments: {} }));
+  assert.equal(mcpUsage.usage.total_bytes, beforeManagement.usage.total_bytes);
+  assert.ok(beforeManagement.usage.history_bytes > 0);
+  const managedProfile = alice.page.locator(`[data-managed-id="${profile.id}"]`);
+  await managedProfile.getByText("Inspect preserved history", { exact: true }).click();
+  await managedProfile.getByText("Version 1 ·", { exact: false }).waitFor();
+  const forbiddenDelete = await webApi(other.page, `records/${profile.id}`, "DELETE", { confirmation: "DELETE RECORD", expected_revision: 2 });
+  assert.equal(forbiddenDelete.status, 404);
+  const staleDelete = await webApi(alice.page, `records/${profile.id}`, "DELETE", { confirmation: "DELETE RECORD", expected_revision: 1 });
+  assert.equal(staleDelete.status, 409);
+  await alice.page.getByLabel("Filter records by type").selectOption("assessment");
+  assert.equal(await managedProfile.isVisible(), false);
+  const managedAssessment = alice.page.locator(`[data-managed-id="${assessment.id}"]`);
+  await managedAssessment.getByText("Inspect saved content", { exact: true }).click();
+  assert.match(await managedAssessment.innerText(), /SQL not established/);
+  alice.page.once("dialog", dialog => dialog.accept());
+  await managedAssessment.getByRole("button", { name: "Delete assessment record", exact: true }).click();
+  await managedAssessment.waitFor({ state: "detached" });
+  assert.equal((await connection.client.callTool({ name: "get_record", arguments: { id: assessment.id } })).isError, true);
+  results.push("Browser/MCP usage agree; candidates inspect history, filter and delete assessments; cross-user and stale deletion denied");
+
+  await alice.page.getByRole("button", { name: "My profile", exact: true }).click();
+  await alice.page.getByRole("button", { name: "Add evidence", exact: true }).click();
+  await alice.page.getByLabel("Evidence 2: what you actually did", { exact: true }).fill("Unsaved fictional item to remove");
+  alice.page.once("dialog", dialog => dialog.accept());
+  await alice.page.getByRole("button", { name: "Remove evidence 2", exact: true }).click();
+  assert.equal(await alice.page.getByLabel("Evidence 2: what you actually did", { exact: true }).count(), 0);
+  await alice.page.getByRole("button", { name: "Save profile", exact: true }).click();
+  await alice.page.getByRole("button", { name: "Activity & privacy", exact: true }).click();
+  await alice.page.getByLabel("Filter records by type").selectOption("profile");
+  const beforeProfileDelete = (await webApi(alice.page, "state")).body.usage;
+  alice.page.once("dialog", dialog => dialog.accept());
+  await alice.page.getByRole("button", { name: "Delete profile record", exact: true }).click();
+  await alice.page.locator(`[data-managed-id="${profile.id}"]`).waitFor({ state: "detached" });
+  const afterProfileDelete = (await webApi(alice.page, "state")).body;
+  assert.ok(afterProfileDelete.usage.total_bytes < beforeProfileDelete.total_bytes);
+  assert.equal(afterProfileDelete.records.filter(record => record.kind === "profile").length, 0);
+  const replacementProfile = decoded(await connection.client.callTool({ name: "save_profile", arguments: { expected_revision: 0, data: profile.data } }));
+  assert.equal(replacementProfile.revision, profile.revision);
+  assert.notEqual(replacementProfile.id, profile.id);
+  assert.equal((await webApi(alice.page, "state")).body.reviews[0].current, false);
+  const afterDeletionExport = await webApi(alice.page, "export");
+  assert.equal(afterDeletionExport.body.versions.some(version => version.record_id === profile.id), false);
+  results.push("Evidence removal, profile/history deletion and quota recovery; recreated revision-1 profile cannot revive old review");
+
   await alice.page.getByRole("button", { name: "Sign out", exact: true }).click();
   await alice.page.getByRole("button", { name: "Sign in with a passkey" }).waitFor();
   await alice.page.getByRole("button", { name: "Sign in with a passkey" }).click();

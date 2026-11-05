@@ -129,9 +129,49 @@ test("agent cannot delete records; website deletion removes linked records", asy
   try {
     const job = await f.user.save(jobInput());
     await f.user.save({ kind: "draft", job_id: job.id, expected_revision: 0, data: { type: "resume", content: "Draft", evidence_ids: [], unresolved_claims: "" } });
-    await assert.rejects(f.assistant.removeRecord(job.id), /candidate/);
-    await f.user.removeRecord(job.id);
+    await assert.rejects(f.assistant.removeRecord(job.id, job.revision), /candidate/);
+    await f.user.removeRecord(job.id, job.revision);
     assert.equal((await f.user.list()).length, 0);
+  } finally { f.db.close(); }
+});
+test("replacing a deleted profile cannot revive approval at the same revision", async () => {
+  const f = await fixture();
+  try {
+    const old = await f.user.save({ kind: "profile", expected_revision: 0, data: profileData });
+    const job = await f.user.save(jobInput());
+    const draft = await f.assistant.save({ kind: "draft", job_id: job.id, expected_revision: 0, data: { type: "resume", content: "Old evidence", evidence_ids: ["communication"], unresolved_claims: "" } });
+    assert.equal(draft.data.profile_id, old.id);
+    const review = { action: "approved", draft_id: draft.id, draft_revision: draft.revision, destination: jobData.source_url, confirmation: "Reviewed original profile evidence" };
+    await f.user.review(job.id, review);
+    await f.user.removeRecord(old.id, old.revision);
+    assert.equal((await f.user.reviews())[0].current, false);
+    const replacement = await f.user.save({ kind: "profile", expected_revision: 0, data: profileData });
+    assert.equal(old.revision, replacement.revision);
+    assert.notEqual(old.id, replacement.id);
+    assert.equal((await f.user.reviews())[0].current, false);
+    await assert.rejects(f.user.review(job.id, review), /profile changed/);
+    await assert.rejects(f.user.review(job.id, { ...review, action: "submitted" }), /profile changed/);
+  } finally { f.db.close(); }
+});
+test("owner-only usage counts UTF-8 content and history; deletion frees quota and rejects stale versions", async () => {
+  const f = await fixture();
+  try {
+    const old = await f.user.save({ kind: "profile", expected_revision: 0, data: { ...profileData, goals: "日本語 👋" } });
+    const current = await f.user.save({ kind: "profile", id: old.id, expected_revision: old.revision, data: profileData });
+    const usage = await f.user.usage();
+    assert.equal(usage.records, 1);
+    assert.equal(usage.historical_versions, 1);
+    assert.equal(usage.current_bytes, Buffer.byteLength(JSON.stringify(current.data)));
+    assert.equal(usage.history_bytes, Buffer.byteLength(JSON.stringify(old.data)));
+    assert.equal(usage.total_bytes, usage.current_bytes + usage.history_bytes);
+    assert.equal((await f.other.usage()).total_bytes, 0);
+    await assert.rejects(f.user.removeRecord(current.id, old.revision), /Record changed/);
+    await assert.rejects(new WorkspaceStore(f.db, f.bob, "website").removeRecord(current.id, current.revision), /not found/);
+    assert.equal((await f.user.usage()).total_bytes, usage.total_bytes);
+    await f.user.removeRecord(current.id, current.revision);
+    assert.equal((await f.user.usage()).records, 0);
+    assert.equal((await f.user.usage()).total_bytes, 0);
+    assert.equal((await f.user.usage()).historical_versions, 0);
   } finally { f.db.close(); }
 });
 test("URLs reject local and credential destinations; streaming body limits apply without Content-Length", async () => {

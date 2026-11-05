@@ -38,7 +38,7 @@ This example is not an instruction to paste a token into source, a public repo, 
 | Tool | Access | What it does |
 |---|---|---|
 | `get_workflow` | authenticated | Read one of seven portable skills |
-| `workspace_info` | read | Show limits and permission boundaries |
+| `workspace_info` | read | Show current/history storage usage, limits and permission boundaries |
 | `list_records` | read | List owned records, reviews, outcomes, and next-action dates |
 | `get_record` / `record_history` | read | Retrieve current content or preserved previous versions |
 | `export_workspace` | read | Return portable JSON; this brings all workspace content into the assistant |
@@ -51,7 +51,7 @@ This example is not an instruction to paste a token into source, a public repo, 
 
 All IDs are scoped to the authenticated owner. Tools cannot supply another `user_id`. Writes require `expected_revision` (0 for a new record); stale edits return an error instead of overwriting. Retrieve and reconcile before retrying. Exact source URLs identify requisitions; common tracking query parameters are removed, but the server does not guess whether different URLs are the same job.
 
-New or changed assistant-supplied evidence is always **unconfirmed**, even if the tool input says confirmed. Only the candidate can check it on the website. Assessment quotes must occur in the captured posting and evidence IDs must exist, but the service cannot prove that every written claim is truthful. Model output still needs human review.
+New or changed assistant-supplied evidence is always **unconfirmed**, even if the tool input says confirmed. Only the candidate can check it on the website. Assessment quotes must occur in the captured posting and evidence IDs must exist, but the service cannot prove that every written claim is truthful. Model output still needs human review. The server stamps linked preparation records with the current profile ID and revision; deleting/recreating a profile cannot revive old approval even if revision numbers match.
 
 Captured source URLs and original postings cannot be overwritten. Drafts, profiles, and assessments preserve previous versions; history counts toward the quota. Drafts record the profile revision used. Changing either the draft or profile makes the old approval stale. Candidate-recorded submissions remain historical assertions, not independent employer verification.
 

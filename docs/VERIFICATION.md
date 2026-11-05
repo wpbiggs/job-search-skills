@@ -1,6 +1,8 @@
 # Verification record — 2026-11-05
 
-Latest private-service increment: `5304f6b5-1f65-4bdf-a4fd-00334a2e2443`. Candidate-visible evidence/source/confirmation details and changed-profile assessment warnings were added; unsaved draft edits cannot be approved or marked submitted. Typecheck, 13 Node tests, isolated workerd/browser tests, and the expanded live fictional-user suite passed. See [the full-goal audit](COMPLETION_AUDIT.md) for unresolved requirements; the original release below is not a claim of complete product validation.
+Latest private-service increment: `b9196406-f1cc-4c5f-82c1-5453fb718f7f`. Candidates can inspect/delete any preparation record and its history, remove evidence from the current profile, and see storage usage. Approvals track profile identity as well as revision so deleting/recreating a profile cannot revive old approval. Deletion rejects stale revisions. Typecheck, 15 Node tests, 17 Python tests, isolated workerd/browser tests and the expanded live fictional-user suite passed. Cleanup aggregate counts were zero. Public downloads were refreshed in portfolio version `f7bce5fc-18c3-42f9-b80f-0714395be861`, followed by passing public-page and 36 portfolio route/viewport checks. See [the full-goal audit](COMPLETION_AUDIT.md) for unresolved requirements; the original release below is not a claim of complete product validation.
+
+Previous increment `5304f6b5-1f65-4bdf-a4fd-00334a2e2443` added candidate-visible evidence/source/confirmation details, changed-profile assessment warnings, and protection against approving or marking submitted with unsaved draft edits. These checks remain in the live suite.
 
 This is an implementation/protocol test record, not an independent security audit or proof that an AI's research is accurate.
 

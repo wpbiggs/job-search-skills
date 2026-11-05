@@ -86,15 +86,15 @@ async function api(request: Request, env: Env, path: string, server: OAuthAuthor
   const store = new WorkspaceStore(env.DB, user.id, "website");
   if (path === "state" && request.method === "GET") {
     const grants = await server.getOAuthApi(env).listUserGrants(user.id, { limit: 30 });
-    return Response.json({ user: { name: user.name, created_at: user.created_at }, records: await store.list(), reviews: await store.reviews(), outcomes: await store.outcomes(), connections: grants.items.map(grant => ({ id: grant.id, clientId: grant.clientId, scope: grant.scope, createdAt: grant.createdAt, current: grant.metadata?.epoch === user.epoch })) });
+    return Response.json({ user: { name: user.name, created_at: user.created_at }, usage: await store.usage(), records: await store.list(), reviews: await store.reviews(), outcomes: await store.outcomes(), connections: grants.items.map(grant => ({ id: grant.id, clientId: grant.clientId, scope: grant.scope, createdAt: grant.createdAt, current: grant.metadata?.epoch === user.epoch })) });
   }
   if (path === "export" && request.method === "GET") return Response.json(await store.export(), { headers: { "Content-Disposition": 'attachment; filename="job-search-workspace.json"' } });
   if (path.startsWith("versions/") && request.method === "GET") return Response.json({ versions: await store.versions(z.string().uuid().parse(path.slice(9))) });
   if (path === "records" && request.method === "POST") return Response.json({ record: await store.save(saveSchema.parse(await jsonBody(request))) });
   if (path.startsWith("records/") && request.method === "DELETE") {
     const id = z.string().uuid().parse(path.slice(8));
-    z.object({ confirmation: z.literal("DELETE RECORD") }).strict().parse(await jsonBody(request, 1000));
-    await store.removeRecord(id); return Response.json({ ok: true });
+    const body = z.object({ confirmation: z.literal("DELETE RECORD"), expected_revision: z.number().int().positive() }).strict().parse(await jsonBody(request, 1000));
+    await store.removeRecord(id, body.expected_revision); return Response.json({ ok: true });
   }
   if (path === "review" && request.method === "POST") {
     const body = z.object({ job_id: z.string().uuid(), review: z.unknown() }).strict().parse(await jsonBody(request, 6000));

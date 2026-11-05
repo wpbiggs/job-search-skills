@@ -46,9 +46,9 @@ function signInView() {
   }); });
 }
 async function busy(action: () => Promise<void>) {
-  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("button")); buttons.forEach(button => { button.disabled = true; });
+  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).map(button => ({ button, disabled: button.disabled })); buttons.forEach(({ button }) => { button.disabled = true; });
   try { await action(); } catch (error) { message(error instanceof Error ? error.message : "Something went wrong. Please try again."); }
-  finally { buttons.forEach(button => { button.disabled = false; }); }
+  finally { buttons.forEach(({ button, disabled }) => { button.disabled = disabled; }); }
 }
 async function refresh() {
   try { state = await api<State>("state"); }
@@ -98,6 +98,34 @@ function privacyView(): string {
   return `<section class="box"><h2>Private, not invisible to the host</h2><p>Profile, job, draft, review, and activity records are stored in a dedicated Cloudflare D1 database. Passkey public keys and hashed recovery/session credentials are stored for authentication; OAuth client grants live in a separate namespace. We do not store your passkey private key or biometric data.</p><p>This is not end-to-end encrypted storage: hosting administrators can access records. Connected assistants can read only the scopes you approve, but their providers have separate processing and retention policies. No inference runs here, and no employer receives anything from this service.</p><p>Keep secrets, government IDs, financial information, and confidential employer documents out. Limits: 250 records, 64 KiB per record, 2 MiB total. Up to 200 minimal activity events are retained; they do not contain draft bodies.</p><div class="actions"><a class="button" href="/job-search/api/export" download="job-search-workspace.json">Export my workspace</a><button id="add-passkey" class="secondary">Add another passkey</button></div><p class="muted">An export contains personal data. Save it privately. It excludes authentication credentials and tokens. Passkeys are specific to this site; a self-hosted deployment needs its own passkeys.</p></section><section class="box"><h2>Delete a record</h2><p>You can delete a job and its related records, or an individual draft or interview note, under Jobs &amp; drafts. Export first if you want to keep a copy.</p></section><section class="box"><h2>Activity you can inspect</h2><div id="activity"><p class="muted">Loading activity…</p></div></section><section class="box"><h2>Delete my workspace</h2><p>Deletes the active profile, jobs, drafts, reviews, activity, passkeys, recovery code, and sessions. Assistant access is revoked. This cannot erase exports or copies held by your assistant; hosting backups may persist for their retention period.</p><button id="delete-workspace" class="danger">Delete my entire workspace</button><p><a href="https://github.com/wpbiggs/job-search-skills/blob/main/docs/HOSTED_WORKSPACE.md">Full storage, retention, and self-hosting details ↗</a></p></section>`;
 }
 function wireSection() {
+  if (tab === "jobs") {
+    const assessments = state!.records.filter(record => record.kind === "assessment" && record.job_id === selectedJob);
+    const boxes = Array.from(document.querySelectorAll<HTMLElement>(".split > section > .box")).filter(box => box.querySelector("h3")?.textContent === "Evidence-based fit");
+    assessments.forEach((record, index) => {
+      const box = boxes[index]; if (!box) return;
+      const evidence = profile().evidence;
+      const cited = [...new Set((record.data.requirements as { evidence_ids: string[] }[]).flatMap(item => item.evidence_ids))];
+      const details = document.createElement("div");
+      const stale = record.data.profile_revision !== (profileRecord()?.revision ?? 0);
+      details.innerHTML = `${stale ? '<p class="badge warn">Profile changed since this assessment — ask your assistant to reassess.</p>' : ""}<h3>Candidate evidence behind this recommendation</h3>${cited.length ? cited.map(id => {
+        const item = evidence.find(item => item.id === id);
+        return item ? `<article class="record"><strong>${esc(item.id)}</strong> <span class="badge ${item.confirmed ? "success" : "warn"}">${item.confirmed ? "Candidate-confirmed" : "Not yet confirmed"}</span><p>${esc(item.claim)}</p><small>Source: ${esc(item.source)}</small></article>` : `<p class="badge warn">${esc(id)} — no longer in the current profile</p>`;
+      }).join("") : '<p class="muted">No candidate evidence cited. Do not treat this recommendation as established fit.</p>'}<p class="muted">These are current profile statements, not independent verification. Historical profile versions remain in your export.</p>`;
+      box.append(details);
+    });
+    for (const draft of records("draft").filter(record => record.job_id === selectedJob)) {
+      const input = document.getElementById(`draft-${draft.id}`) as HTMLTextAreaElement | null;
+      const box = input?.closest("section"); if (!input || !box) continue;
+      const warning = document.createElement("p"); warning.className = "muted"; warning.setAttribute("role", "status");
+      input.after(warning);
+      const update = () => {
+        const dirty = input.value.trim() !== String(draft.data.content);
+        warning.textContent = dirty ? "Unsaved edits: save this version before approving it or recording a submission." : "";
+        box.querySelectorAll<HTMLButtonElement>("[data-review]").forEach(button => { button.disabled = dirty; });
+      };
+      input.addEventListener("input", update); update();
+    }
+  }
   if (tab === "jobs" && selectedJob) {
     const section = document.querySelector(".split > section"), current = state!.outcomes.find(item => item.job_id === selectedJob);
     if (section) {
@@ -135,6 +163,7 @@ function wireSection() {
   }));
   document.querySelectorAll<HTMLButtonElement>("[data-review]").forEach(button => button.onclick = () => void busy(async () => {
     const draft = state!.records.find(record => record.id === button.dataset.draft)!, job = state!.records.find(record => record.id === draft.job_id)!;
+    if (value(`draft-${draft.id}`) !== draft.data.content) throw new Error("Save your draft edits before approving or recording a submission.");
     const action = button.dataset.review!;
     let confirmation = "I reviewed this exact version for factual accuracy and approve its use at the displayed destination. No upload or submission is performed by this action.";
     if (action === "approved") {

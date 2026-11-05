@@ -1,5 +1,7 @@
 # Verification record — 2026-11-05
 
+Latest private-service increment: `5304f6b5-1f65-4bdf-a4fd-00334a2e2443`. Candidate-visible evidence/source/confirmation details and changed-profile assessment warnings were added; unsaved draft edits cannot be approved or marked submitted. Typecheck, 13 Node tests, isolated workerd/browser tests, and the expanded live fictional-user suite passed. See [the full-goal audit](COMPLETION_AUDIT.md) for unresolved requirements; the original release below is not a claim of complete product validation.
+
 This is an implementation/protocol test record, not an independent security audit or proof that an AI's research is accurate.
 
 ## Automated checks

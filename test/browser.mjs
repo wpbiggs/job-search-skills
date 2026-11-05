@@ -119,6 +119,17 @@ try {
   await alice.page.getByRole("button", { name: "Jobs & drafts", exact: true }).click();
   await alice.page.getByRole("heading", { name: "Operations Analyst", exact: true }).waitFor();
   assert.match(await alice.page.locator("main").innerText(), /SQL not established/);
+  await alice.page.getByRole("heading", { name: "Candidate evidence behind this recommendation" }).waitFor();
+  assert.match(await alice.page.locator("main").innerText(), /Source: Fictional candidate fixture/);
+  assert.match(await alice.page.locator("main").innerText(), /Not yet confirmed/);
+  const draftField = alice.page.locator(`#draft-${draft.id}`);
+  await draftField.fill("Unsaved different content must not be approved");
+  assert.equal(await alice.page.getByRole("button", { name: "Approve this version & destination" }).isDisabled(), true);
+  await alice.page.getByText("Unsaved edits: save this version before approving it or recording a submission.", { exact: true }).waitFor();
+  assert.equal((await webApi(alice.page, "state")).body.reviews.length, 0);
+  await draftField.fill(draft.data.content);
+  assert.equal(await alice.page.getByRole("button", { name: "Approve this version & destination" }).isEnabled(), true);
+  results.push("Visible candidate evidence and confirmation state; unsaved draft edits cannot be approved");
   alice.page.once("dialog", dialog => dialog.accept());
   await alice.page.getByRole("button", { name: "Approve this version & destination" }).click();
   await alice.page.getByRole("button", { name: "I submitted this myself", exact: true }).waitFor();
@@ -151,6 +162,10 @@ try {
   assert.equal(tracked.outcomes[0].status, "interviewing");
   assert.equal(tracked.reviews[0].action, "submitted");
   results.push("Candidate-only submission assertion and interview outcome appear to the connected assistant (fictional fixtures)");
+  decoded(await connection.client.callTool({ name: "save_profile", arguments: { id: profile.id, expected_revision: profile.revision, data: { ...profile.data, goals: "Updated fictional goals requiring reassessment" } } }));
+  await alice.page.getByRole("button", { name: "Refresh records" }).click();
+  await alice.page.getByText("Profile changed since this assessment — ask your assistant to reassess.", { exact: true }).waitFor();
+  results.push("Assessment explicitly flags a newer profile instead of silently presenting old advice as current");
 
   for (const width of [1440, 390]) {
     await alice.page.setViewportSize({ width, height: 1000 });

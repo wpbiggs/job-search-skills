@@ -7,8 +7,15 @@ __pycache__/
 !.env.example
 .openchamber/
 .vscode/
-workspace/
-private/
+/workspace/
+/private/
 *.docx
 *.pdf
 node_modules/
+.wrangler/
+.dev.vars*
+worker-configuration.d.ts
+public/job-search/workspace/app.js
+public/job-search/workspace/app.js.map
+*.sqlite*
+test-results/

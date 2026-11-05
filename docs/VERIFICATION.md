@@ -1,0 +1,33 @@
+# Verification record — 2026-11-05
+
+This is an implementation/protocol test record, not an independent security audit or proof that an AI's research is accurate.
+
+## Automated checks
+
+- 17 Python tests cover the original local CLI, privacy/path boundaries, and allowlisted reproducible public downloads.
+- 13 Node tests cover shared SQLite storage, two-owner isolation, evidence confirmation, duplicate requisitions, stale edits, quoted requirements, candidate-only review and outcomes, draft/profile approval invalidation, preserved history, export, deletion, body/URL limits, quotas, bounded activity, and real local stdio MCP persistence/read-only connections.
+- `npm run typecheck` checks both Worker/Node and browser code against their own environments.
+- `npm run build` packages the actual Worker, and `npm audit` reports no known dependency vulnerabilities at the time checked. This is not a guarantee of security.
+- `npm run test:worker` provisions disposable **local-only** storage, runs the Worker in workerd, and exercises the real browser/MCP protocol. It does not share remote bindings.
+
+## Deployed end-to-end checks
+
+`WORKSPACE_ORIGIN=https://william.biggers.family npm run test:browser` passed using **two fictional users and virtual authenticators**, not a production authentication bypass:
+
+- Passkey registration with required user verification, passkey reauthentication, and persisted records.
+- Unauthenticated 401 challenge and path-aware authorization/protected-resource discovery.
+- OAuth Allow and Deny, real cross-origin callback navigation, authorization-code/S256 PKCE exchange, resource-bound access, and refresh-token rotation.
+- Modern MCP SDK connection plus legacy `2025-06-18` Streamable HTTP initialization.
+- Read-only versus read/write tool visibility; assistant record writes visible in the website, candidate review/outcomes visible through MCP.
+- Cross-user reads denied; MCP tokens cannot authorize the cookie-only website API; browser cookies cannot authorize MCP; CSRF and untrusted browser Origins are rejected.
+- Candidate approval of an exact draft/destination, stale approval after editing, preserved earlier draft versions, and explicit candidate-reported submission/interview fixtures. No employer was contacted and no real application was submitted.
+- Desktop/mobile layout checks and credential-free portable export.
+- Single-use rotating recovery code, immediate denial of old access and refresh tokens, deletion ending sessions and removing owned data.
+
+After the live test, a read-only aggregate database query confirmed **zero users, records, historical versions, sessions, passkeys, reviews, and outcomes** remained. No real candidate data was imported. The fixture client registrations can remain until their provider TTL; they contain no candidate records or usable revoked grants.
+
+## Explicit limits
+
+Specific commercial client UIs, subscription/administrator restrictions, and unattended connector scheduling are not established by generic SDK tests. No actual employer browsing, browser form filling, model inference, factual resume validation, notifications, or daily task execution is performed by the server or this test suite. Real users must create their own passkey and authorize their own assistant. The site and docs state these limits.
+
+The original portfolio and instructions/download page have a separate regression suite in the existing portfolio source. They are not bundled into this standalone service. See `docs/HOSTED_WORKSPACE.md` for hosting, retention, self-hosting, and operator responsibilities.

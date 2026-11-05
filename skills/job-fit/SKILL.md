@@ -5,6 +5,9 @@ description: Evaluate whether a job suits a candidate using explicit constraints
 
 # Job fit
 
+## MCP or conversation mode
+With Job Search MCP connected, retrieve the profile and owned job, then use `save_assessment` with verbatim posting quotes, existing evidence IDs, constraints, gaps, and unknowns. Check candidate evidence confirmation flags. Do not create hiring probabilities. Without MCP/files, return the same assessment in conversation; file paths below are optional.
+
 ## Inputs
 A real saved posting with source and date, the candidate's confirmed profile, and their evidence inventory. Do not assume missing constraints are satisfied.
 

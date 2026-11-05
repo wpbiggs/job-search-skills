@@ -5,6 +5,9 @@ description: Prepare evidence-backed interview stories, practice questions, empl
 
 # Interview preparation
 
+## MCP or conversation mode
+With Job Search MCP connected, read the profile, assessment, and job, then save practice materials through `save_interview_prep` with evidence IDs and explicit unknowns. Never imply likely practice questions are known employer questions. Outcomes are candidate-recorded on the website. Without MCP/files, run the same practice workflow in conversation; file paths below are optional.
+
 ## Inputs
 A saved posting, candidate resume/evidence, fit assessment, and any candidate-supplied interview format. Use live web research only with permission; cite sources and dates.
 

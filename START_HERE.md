@@ -1,5 +1,11 @@
 # Job Search Skills — start here
 
+**Optional persistent workspace:** https://william.biggers.family/job-search/workspace
+connects compatible AI assistants through authenticated MCP. Read
+https://github.com/wpbiggs/job-search-skills/blob/main/docs/MCP.md for setup and
+privacy boundaries. It stores records, not AI keys, and does not run research or
+submit applications itself. The account-free instructions workflow below still works.
+
 Find work that fits you with an AI assistant you already use. No special model,
 agent framework, browser tool, Python installation, or account on our website is
 required for the instructions-based workflow.
@@ -54,11 +60,15 @@ path that works:
 Use the career-profile workflow first, then job-discovery, job-fit,
 application-materials, browser-assistance, application-tracking, or interview-prep
 as needed. No shell access, installation, MCP server, or subagent is required to
-provide basic help. This release does not ship an MCP server.
+provide basic help. A compatible assistant can optionally connect to our MCP
+server for private persistent records; never claim a connection exists until its
+tools are actually available.
 
 ## Privacy and limits
 
-The landing page does not accept resumes or run an AI service. Your chosen
+The public landing page does not accept resumes or run an AI service. The optional
+private workspace stores records only after passkey registration and disclosure.
+Your chosen
 assistant, its provider, browser tools, and hosting services have their own
 privacy policies and possible costs. Review them before sharing personal data.
 The website host may process normal web request information. Do not interpret

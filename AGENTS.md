@@ -34,6 +34,8 @@ Help the candidate pursue suitable, legitimate work while preserving their agenc
 
 ## Private workspace convention
 
+An authenticated MCP workspace is an alternative to files, not a shell prerequisite. Inspect `workspace_info`, `list_records`, and `get_record`; use task-specific save tools with current revisions. Read-only clients cannot write. New assistant evidence is unconfirmed until website review. Only the candidate can approve a draft/destination, confirm a submission/outcome, revoke access, or delete hosted data. No CLI or separate browser tool may be used to bypass that permission boundary. The optional local SQLite MCP store is separate from hosted records; it does not silently sync.
+
 `profile.md`, `resume.md`, `applications/<id>/job_posting.txt`, `application.json`, `fit.md`, `tailored_resume.md`, `cover_letter.md`, `notes.md`, `browser_task.md`, and `interview_prep.md`.
 
 The CLI owns `application.json`; use its `status` command for transitions. Other Markdown artifacts are agent-authored drafts. Preserve the original posting and base resume. Avoid overwriting candidate edits; ask or create a new draft.

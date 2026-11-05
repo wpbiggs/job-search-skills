@@ -5,6 +5,9 @@ description: Find and verify current job opportunities that match a candidate's 
 
 # Job discovery
 
+## MCP or conversation mode
+With Job Search MCP connected, inspect existing jobs with `list_records`/`get_record`, then use `capture_job` after verifying the source with your harness's actual browsing tools. MCP stores postings but does not search or verify them. Without web tools, use pasted postings and label freshness unknown. File paths below are optional; do not require shell access.
+
 ## Inputs
 A confirmed career search brief and permission to research named sites or an agreed domain scope. Requires web tools for live discovery; without them, request URLs or pasted postings and do not claim a live search occurred.
 

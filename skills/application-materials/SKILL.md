@@ -5,6 +5,9 @@ description: Draft truthful job-specific resumes, cover letters, and screening a
 
 # Application materials
 
+## MCP or conversation mode
+With Job Search MCP connected, read the profile, job, and assessment, then use `save_draft` with evidence IDs and unresolved claims. Read the current record revision before updates. The server stores the profile revision used and invalidates old approval after draft/profile changes. Only the candidate approves a version/destination on the website. Without MCP/files, return unapproved drafts in conversation; file paths below are optional.
+
 ## Inputs
 An approved target role, the original posting, `fit.md` if available, and the candidate's factual resume/evidence. Ask for missing facts rather than completing them creatively.
 

@@ -5,6 +5,9 @@ description: Clarify a job seeker's goals, constraints, preferences, and evidenc
 
 # Career profile
 
+## MCP or conversation mode
+With Job Search MCP connected, use `list_records`/`get_record` for the existing profile and `save_profile` for proposals after permission to store data. New assistant evidence is unconfirmed until the candidate verifies it on the website. A private workspace can be remote records, not a filesystem path. Without MCP or files, ask questions and return a profile draft in conversation; file paths below are optional conventions.
+
 ## Inputs
 An approved private workspace path, the candidate's own resume or experience notes, and their permission to read them. No browser is needed.
 

@@ -5,6 +5,9 @@ description: Maintain accurate private job-application records, observed outcome
 
 # Application tracking
 
+## MCP or conversation mode
+With Job Search MCP connected, read `list_records` for jobs, reviews, outcomes, and next-action notes. Assistants may prepare job stages and log their own harness work with `record_run`; only the candidate records submissions and outcomes on the website. A next-action date is not a scheduled reminder. Do not use the optional CLI to bypass the hosted website's candidate-only controls. Without MCP/files, return an accurate tracking table in conversation.
+
 ## Inputs
 The approved private workspace and observed events or candidate-confirmed updates. The full repository's `scripts/job_search.py` supports `list` and `status`; consult `--help`.
 

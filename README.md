@@ -8,12 +8,15 @@ Use reusable agent skills with your preferred AI assistant and optional browser 
 
 ## What works today
 
+- An optional [private website workspace](https://william.biggers.family/job-search/workspace), with passkey sign-in, recovery, candidate-only reviews, outcomes, export, and deletion.
+- An authenticated [remote MCP endpoint](docs/MCP.md) for the AI assistant you choose, plus a local SQLite/stdio mode. No model keys, hosted inference, or SurrealSites dependency.
+
 - Seven portable `SKILL.md` workflows for profiling, discovery, fit assessment, truthful application materials, browser assistance, tracking, and interviews.
 - A dependency-free Python CLI to create a private workspace, capture postings, track statuses, and prepare browser task briefs.
 - Integration guides for [Alibaba Page Agent](https://github.com/alibaba/page-agent) and [Browser Use](https://github.com/browser-use/browser-use).
 - Fictional examples, human approval checkpoints, and automated tests.
 
-**Scope:** skills are instructions executed by your agent, not a bundled AI service. The CLI does not search the web, call an LLM, calculate hiring odds, drive a browser, or submit applications. Browser integrations require separate installation and configuration. No API key is needed for the CLI; your chosen agent or browser model may incur costs.
+**Scope:** the server stores records and supplies tools; the skills are instructions executed by your agent, not a bundled AI service. Neither the CLI nor MCP server searches the web, calls an LLM, calculates hiring odds, drives a browser, or submits applications. Browser integrations require separate configuration. Your chosen assistant supplies research and any harness-supported scheduling and may incur costs or process data externally. See [connection instructions](docs/MCP.md) and [hosted privacy/self-hosting](docs/HOSTED_WORKSPACE.md).
 
 ## Quick start
 
@@ -77,6 +80,8 @@ Read [AGENTS.md](AGENTS.md) for orchestration, [browser integrations](docs/brows
 ```sh
 python3 -m unittest discover -s tests -v
 ```
+
+For the optional TypeScript service: `npm ci`, `npx wrangler types`, `npm run typecheck`, `npm test`, and `npm run build`. The [hosted guide](docs/HOSTED_WORKSPACE.md) covers isolated local browser/protocol tests and deployment.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Do not include real resumes, postings containing personal data, cookies, or application histories in issues or pull requests. This is an early toolkit, not a guarantee of interviews or employment.
 

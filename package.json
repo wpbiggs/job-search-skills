@@ -1,0 +1,37 @@
+{
+  "name": "job-search-workspace",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Private job-search records and MCP tools for the AI assistant you choose",
+  "scripts": {
+    "dev": "wrangler dev --port 8791 --ip localhost --var PUBLIC_ORIGIN:http://localhost:8791 --var RP_ID:localhost --infer-origin-from-routes=false",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:browser": "node test/browser.mjs",
+    "test:worker": "node scripts/test-worker.mjs",
+    "build": "wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "mcp:local": "tsx src/local.ts"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "1.2.4",
+    "@modelcontextprotocol/client": "2.4.0",
+    "@modelcontextprotocol/server": "2.4.0",
+    "@simplewebauthn/browser": "14.0.0",
+    "@simplewebauthn/server": "14.0.0",
+    "agents": "0.33.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "esbuild": "0.25.12",
+    "playwright": "1.64.1",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "wrangler": "4.158.0"
+  }
+}

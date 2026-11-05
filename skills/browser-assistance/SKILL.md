@@ -5,6 +5,9 @@ description: Use an available browser agent to research job pages or assist with
 
 # Browser assistance
 
+## MCP or conversation mode
+Job Search MCP does not control a browser, grant permission to disclose data, or submit applications. Use only a separately available browser tool with the candidate's explicit destination/payload approval. Website approval is tied to the reviewed draft version; it is not blanket authorization for autonomous action. Without a constrained browser tool, provide a manual checklist. File paths below are optional.
+
 ## Inputs
 A user-approved URL/domain scope, a clear task, and an already configured browser tool. See `docs/browser-integrations.md` in the full repository for Page Agent and Browser Use options. If no browser tool is available, say so and offer a manual checklist; do not claim to have browsed.
 

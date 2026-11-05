@@ -4,6 +4,8 @@ An open, candidate-first toolkit for finding and pursuing work that fits you—n
 
 Use reusable agent skills with your preferred AI assistant and optional browser tools. Keep your experience, preferences, resumes, and application history in a **private local workspace**.
 
+**No-code start:** visit [Job Search Skills](https://william.biggers.family/job-search) to copy a starter prompt or download the instructions. You can also read [START_HERE.md](START_HERE.md) directly. An assistant without browsing or file access can work from pasted postings and return drafts in chat—no terminal required.
+
 ## What works today
 
 - Seven portable `SKILL.md` workflows for profiling, discovery, fit assessment, truthful application materials, browser assistance, tracking, and interviews.
@@ -77,6 +79,10 @@ python3 -m unittest discover -s tests -v
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Do not include real resumes, postings containing personal data, cookies, or application histories in issues or pull requests. This is an early toolkit, not a guarantee of interviews or employment.
+
+### Public download assets
+
+`python3 scripts/build_share_assets.py --output /path/to/public/job-search` builds a standalone `guide.md` and a skills ZIP from an explicit public-file allowlist. It never walks a candidate workspace. Rebuild and deploy these assets when the source instructions change. The portfolio landing page is maintained separately in its existing site source.
 
 ## License and origins
 

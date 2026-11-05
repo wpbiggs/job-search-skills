@@ -6,8 +6,8 @@ Help the candidate pursue suitable, legitimate work while preserving their agenc
 
 ## Start here
 
-1. Ask for the private workspace path. Never assume the repository is the workspace.
-2. Read the candidate's profile and evidence only with permission. Use `skills/career-profile/SKILL.md` to fill gaps. Ask before sending private content to an external provider.
+1. Check your actual capabilities. For file-based work, ask for the private workspace path; never assume the repository is the workspace. Without file access, work in conversation and return drafts for the candidate to save. File paths below describe optional file-based conventions, not prerequisites.
+2. Read the candidate's supplied profile and evidence only with permission. Use the career-profile skill to fill gaps (at `skills/career-profile/SKILL.md` in the repository or included in the standalone guide). Ask before sending private content to an external provider.
 3. Select the relevant skill below. No subagents or autonomous scheduled runs are required.
 4. Summarize what was found, what remains uncertain, and the next decision the candidate needs to make.
 

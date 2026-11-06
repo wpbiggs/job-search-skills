@@ -162,6 +162,64 @@ try {
   assert.equal(tracked.outcomes[0].status, "interviewing");
   assert.equal(tracked.reviews[0].action, "submitted");
   results.push("Candidate-only submission assertion and interview outcome appear to the connected assistant (fictional fixtures)");
+  // Isolated preparation for the manual handoff flow. Never contact a real employer.
+  const handoffProfile = (await webApi(other.page, "records", "POST", { kind: "profile", expected_revision: 0, data: { goals: "Fictional fixture only", preferences: "", constraints: "", evidence: [{ id: "fixture", claim: "Fictional writing", source: "Test fixture", confirmed: true }] } })).body.record;
+  const handoffJob = (await webApi(other.page, "records", "POST", { kind: "job", expected_revision: 0, data: { company: "Fictional handoff fixture", title: "Fixture Writer", source_url: "https://example.com/jobs/handoff-fixture", location: "Unknown", compensation: "Unknown", posting: "Fictional writing role", checked_at: new Date().toISOString() } })).body.record;
+  const handoffDraft = (await webApi(other.page, "records", "POST", { kind: "draft", job_id: handoffJob.id, expected_revision: 0, data: { type: "resume", content: "Fictional writing document — fixture only", evidence_ids: ["fixture"], unresolved_claims: "" } })).body.record;
+  const preview = await webApi(other.page, "handoffs/preview", "POST", { job_id: handoffJob.id, draft_id: handoffDraft.id });
+  assert.equal(preview.status, 200);
+  const handoffInput = { job_id: handoffJob.id, draft_id: handoffDraft.id, expected_digest: preview.body.snapshot.payload_digest, confirmation: "APPROVE MANUAL HANDOFF" };
+  const tokenHandoff = await fetch(`${origin}/job-search/api/handoffs/approve`, { method: "POST", headers: { Authorization: `Bearer ${readOnly.tokens.access_token}`, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(handoffInput) });
+  assert.equal(tokenHandoff.status, 401);
+  const handoffCsrf = await other.context.request.post(`${origin}/job-search/api/handoffs/approve`, { headers: { Origin: "https://untrusted.example" }, data: handoffInput });
+  assert.equal(handoffCsrf.status(), 403);
+  await other.page.getByRole("button", { name: "Jobs & drafts", exact: true }).click();
+  await other.page.getByRole("button", { name: "Review saved handoff", exact: true }).click();
+  await other.page.getByRole("heading", { name: "Exact saved document", exact: true }).waitFor();
+  await other.page.locator("#approve-handoff-check").check();
+  await other.page.locator(`#draft-${handoffDraft.id}`).fill("Unsaved fictional change");
+  await other.page.getByRole("button", { name: "Approve 15-minute manual handoff", exact: true }).click();
+  await other.page.getByText("Save or discard your unsaved document edits before approving the saved version.", { exact: true }).waitFor();
+  assert.deepEqual((await webApi(other.page, "handoffs")).body.handoffs, []);
+  await other.page.locator(`#draft-${handoffDraft.id}`).fill(handoffDraft.data.content);
+  await other.page.getByRole("button", { name: "Approve 15-minute manual handoff", exact: true }).click();
+  await other.page.getByRole("button", { name: "Open one-use manual handoff", exact: true }).waitFor();
+  const handoff = (await webApi(other.page, "handoffs")).body.handoffs[0];
+  assert.equal((await webApi(alice.page, "handoffs/action", "POST", { id: handoff.id, action: "open" })).status, 404);
+  assert.equal((await webApi(other.page, "handoffs/approve", "POST", handoffInput)).status, 409);
+  // Two real concurrent HTTP claims on workerd/D1: only one may consume approval.
+  const claims = await Promise.all([1, 2].map(() => webApi(other.page, "handoffs/action", "POST", { id: handoff.id, action: "open" })));
+  assert.deepEqual(claims.map(result => result.status).sort(), [200, 409]);
+  assert.equal((await webApi(other.page, "handoffs")).body.handoffs[0].status, "requires_user");
+  // Candidate manually operates a synthetic ATS; all destination traffic intercepted locally.
+  await other.context.route("https://example.com/jobs/handoff-fixture", route => route.fulfill({ contentType: "text/html", body: '<!doctype html><html lang="en"><head><title>Owned synthetic ATS fixture</title></head><body><h1>Fictional application — no employer contact</h1><label>Application text <textarea id="application"></textarea></label><button id="submit">Submit fictional application</button><p id="receipt"></p><script>document.querySelector("#submit").onclick=()=>{document.querySelector("#receipt").textContent="FICTIONAL-RECEIPT-123";document.querySelector("#submit").disabled=true;};</script></body></html>' }));
+  const ats = await other.context.newPage();
+  await ats.goto(handoff.destination);
+  await ats.getByLabel("Application text").fill(handoffDraft.data.content);
+  await ats.getByRole("button", { name: "Submit fictional application" }).click();
+  const fictionalReceipt = await ats.locator("#receipt").innerText();
+  assert.equal(fictionalReceipt, "FICTIONAL-RECEIPT-123");
+  await ats.close();
+  await other.page.getByRole("button", { name: "Refresh records", exact: true }).click();
+  for (const width of [1440, 390]) {
+    await other.page.setViewportSize({ width, height: 1000 });
+    assert.equal(await other.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, "Handoffs must fit mobile screens");
+  }
+  await other.page.locator(`#receipt-${handoff.id}`).fill(fictionalReceipt);
+  await other.page.locator(`#confirm-${handoff.id}`).check();
+  await other.page.getByRole("button", { name: "Record my submission receipt", exact: true }).click();
+  await other.page.getByText("Submitted — candidate-confirmed, not independently verified", { exact: true }).waitFor();
+  const handoffTracked = decoded(await readOnly.client.callTool({ name: "list_records", arguments: {} }));
+  assert.equal(handoffTracked.handoffs[0].receipt, fictionalReceipt);
+  assert.equal(handoffTracked.handoffs[0].status, "submitted");
+  const handoffExport = (await webApi(other.page, "export")).body;
+  assert.equal(handoffExport.handoffs[0].attempt_id, (await webApi(other.page, "handoffs")).body.handoffs[0].attempt_id);
+  for (const record of [handoffJob, handoffProfile]) assert.equal((await webApi(other.page, `records/${record.id}`, "DELETE", { confirmation: "DELETE RECORD", expected_revision: 1 })).status, 200);
+  assert.deepEqual((await webApi(other.page, "handoffs")).body.handoffs, []);
+  results.push("Exact saved handoff review, unsaved edit denial, token/CSRF/owner isolation, concurrent one-use D1 claims, synthetic ATS manual final click, mobile receipt confirmation, read-only MCP tracker/export and cascading cleanup");
+  // Keep the expanded fixture suite within the real 120/minute production limit.
+  // Do not disable the limiter in tests or widen it for a release.
+  await new Promise(resolve => setTimeout(resolve, 61_000));
   decoded(await connection.client.callTool({ name: "save_profile", arguments: { id: profile.id, expected_revision: profile.revision, data: { ...profile.data, goals: "Updated fictional goals requiring reassessment" } } }));
   await alice.page.getByRole("button", { name: "Refresh records" }).click();
   await alice.page.getByText("Profile changed since this assessment — ask your assistant to reassess.", { exact: true }).waitFor();

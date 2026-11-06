@@ -4,7 +4,17 @@
 
 **Use this repository as the canonical application.** The existing private site at `/job-search/workspace` has passkey identity, owner-bound Cloudflare D1 storage, reviewed versions, portable exports, and MCP. The Supabase JobSearch table and Surreal Sites PR #169 are separate prototypes and **must not be implicitly synced or made authorities**. Do not route the personal portfolio root to a replacement app.
 
-The current Worker intentionally does not contact employers. The separate `src/submission-policy.ts` is a pure policy foundation and **not a deployed submission capability**.
+The Worker intentionally does not contact employers. This release implements **candidate-controlled manual handoffs**, not the proposed delegated browser executor below. The separate `src/submission-policy.ts` remains a pure, unused delegated-policy prototype; the running manual workflow is in `src/submissions.ts` and `src/web/handoffs.ts`.
+
+## Manual-handoff release
+
+- Migration `0004_submission_handoffs.sql` adds bounded owner-scoped intents and one attempt per intent, with cascading deletion and synchronous invalidation on profile/job/draft changes.
+- Same-origin, passkey-session APIs preview an exact saved document and content digest, approve a 15-minute handoff, atomically consume it once, cancel it, or record a candidate-reported receipt. MCP tokens cannot authorize these actions.
+- Responsive web controls show the exact document/destination, explicit confirmation, state, timestamps, digest, attempt and receipt. Unresolved claims, unconfirmed cited evidence and unsaved document edits block approval.
+- You perform all employer interactions and final submission. Opening merely reveals a link; there is no network egress, form filling, upload or browser permission grant. Other documents, employer redirects and additional questions must be reviewed by you.
+- Read-authorized MCP clients can inspect handoff tracking without modifying approval/submission authority. JSON export includes metadata; preparation import discards it.
+- One active handoff or confirmed submission per job. Changed/opened attempts with uncertain outcomes also block retries until deliberate cancellation after checking the employer. Submitted handoffs cannot be reopened.
+- No autonomous schedule, live pilot, employer submission, model call or browser service is enabled by this release. The existing portfolio routes, OAuth resources and Supabase project remain unchanged.
 
 ## Architecture
 
@@ -16,7 +26,7 @@ The current Worker intentionally does not contact employers. The separate `src/s
 6. On an employer system where delegated submission is allowed and the exact reviewed application/consent can be honored, final action is separately authorized and audited; where not, return an interactive browser session for candidate final click.
 7. Mark `submitted` only on an actual employer confirmation/receipt; store timestamp, source, and sanitized evidence with immutable attempt ID. Avoid duplicate retries when outcome is unknown.
 
-## Required implementation before a live rollout
+## Future delegated-browser implementation (not part of the manual release)
 
 - D1 migration for `submission_intents`, `submission_attempts`, and minimal sanitized receipt evidence, with ownership checks and atomic `approved -> claimed` transitions. Reject repeat claims.
 - Server-side approval handler restricted to passkey-authenticated website sessions with same-origin checks, CSRF protections, current revisions, candidate confirmation, and bounded approvals.
@@ -37,6 +47,6 @@ Cloudflare Worker `job-search-workspace` routes `william.biggers.family/job-sear
 - Review migration and use `npx wrangler d1 migrations apply DB --local` first. Production migration and `npm run deploy` require verified Cloudflare authorization and a deliberate release.
 - After deployment verify `/job-search/workspace` sign-in, MCP OAuth, original portfolio routing, owner-isolation and job-search state transitions. **Do not enable employer submissions** until the test-site and live pilot gates pass.
 
-## Status of this branch
+## Verification
 
-Source policy and synthetic policy tests only. No Cloudflare deployment action has been invoked and no employer application submitted.
+Run `npx wrangler types`, `npm run typecheck`, `npm test`, `python3 -m unittest discover -s tests`, `npm run build` and `npm run test:worker`. The isolated workerd suite uses virtual passkeys, concurrent HTTP claims, two-user isolation, OAuth/MCP, desktop/mobile controls and an intercepted synthetic ATS. It pauses for one rate-limit window instead of weakening production limits. No real employer receives fixture data. Deployment evidence is recorded separately after release.

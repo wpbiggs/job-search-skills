@@ -11,6 +11,7 @@ Use reusable agent skills with your preferred AI assistant and optional browser 
 - An optional [private website workspace](https://william.biggers.family/job-search/workspace), with passkey sign-in, recovery, candidate-only reviews, outcomes, export, and deletion.
 - An authenticated [remote MCP endpoint](docs/MCP.md) for the AI assistant you choose, plus a local SQLite/stdio mode. No model keys, hosted inference, or SurrealSites dependency.
 - Candidate-reviewed [preparation portability](docs/PORTABILITY.md) between empty hosted/self-hosted and local destinations, without restoring old authority or credentials.
+- [Reviewed manual handoffs](docs/REVIEWED_SUBMISSION_DEPLOYMENT.md): exact saved-document review, 15-minute one-use opening approval, stale-record protection, and candidate-reported receipts. You operate the employer site and perform final submission; there is no automated browser executor.
 
 - Seven portable `SKILL.md` workflows for profiling, discovery, fit assessment, truthful application materials, browser assistance, tracking, and interviews.
 - A dependency-free Python CLI to create a private workspace, capture postings, track statuses, and prepare browser task briefs.

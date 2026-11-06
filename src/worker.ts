@@ -6,6 +6,7 @@ import { createServer } from "./mcp.ts";
 import { workflows } from "./workflows.ts";
 import { BASE, boundedBody, contentSecurityPolicy, escapeHtml, hash, HttpError, jsonBody, sameOrigin, SCOPES, secure, token } from "./security.ts";
 import { kindSchema, saveSchema, WorkspaceStore } from "./store.ts";
+import { SubmissionStore } from "./submissions.ts";
 
 type Env = Cloudflare.Env;
 const propsSchema = z.object({ userId: z.string().uuid(), epoch: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
@@ -84,6 +85,21 @@ async function api(request: Request, env: Env, path: string, server: OAuthAuthor
   if (path.startsWith("auth/")) return authRoute(request, env, path.slice(5));
   const user = await requireUser(request, env);
   const store = new WorkspaceStore(env.DB, user.id, "website");
+  const submissions = new SubmissionStore(store);
+  if (path === "handoffs" && request.method === "GET") return Response.json({ handoffs: await submissions.list() });
+  if (path === "handoffs/preview" && request.method === "POST") {
+    const body = z.object({ job_id: z.string().uuid(), draft_id: z.string().uuid() }).strict().parse(await jsonBody(request, 1000));
+    return Response.json({ snapshot: await submissions.snapshot(body.job_id, body.draft_id) });
+  }
+  if (path === "handoffs/approve" && request.method === "POST") return Response.json({ id: await submissions.approve(await jsonBody(request, 2000)) });
+  if (path === "handoffs/action" && request.method === "POST") {
+    const body = z.discriminatedUnion("action", [
+      z.object({ id: z.string().uuid(), action: z.literal("open") }).strict(),
+      z.object({ id: z.string().uuid(), action: z.literal("cancel") }).strict(),
+      z.object({ id: z.string().uuid(), action: z.literal("confirm"), receipt: z.string().trim().min(8).max(500), confirmation: z.literal("I SUBMITTED THIS APPLICATION") }).strict(),
+    ]).parse(await jsonBody(request, 2000));
+    return Response.json(await submissions.act(body.id, body.action, body.action === "confirm" ? body.receipt : undefined));
+  }
   if ((path === "import/preview" || path === "import/confirm") && request.method === "POST") {
     const body = z.object({ snapshot: z.unknown(), confirmation: z.literal("IMPORT PREPARATION").optional(), expected_digest: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict().parse(await jsonBody(request, 4 * 1024 * 1024));
     if (path === "import/preview") return Response.json({ preview: await store.previewImport(body.snapshot) });
@@ -92,7 +108,7 @@ async function api(request: Request, env: Env, path: string, server: OAuthAuthor
   }
   if (path === "state" && request.method === "GET") {
     const grants = await server.getOAuthApi(env).listUserGrants(user.id, { limit: 30 });
-    return Response.json({ user: { name: user.name, created_at: user.created_at }, usage: await store.usage(), records: await store.list(), reviews: await store.reviews(), outcomes: await store.outcomes(), connections: grants.items.map(grant => ({ id: grant.id, clientId: grant.clientId, scope: grant.scope, createdAt: grant.createdAt, current: grant.metadata?.epoch === user.epoch })) });
+    return Response.json({ user: { name: user.name, created_at: user.created_at }, usage: await store.usage(), records: await store.list(), reviews: await store.reviews(), outcomes: await store.outcomes(), handoffs: await store.handoffs(), connections: grants.items.map(grant => ({ id: grant.id, clientId: grant.clientId, scope: grant.scope, createdAt: grant.createdAt, current: grant.metadata?.epoch === user.epoch })) });
   }
   if (path === "export" && request.method === "GET") return Response.json(await store.export(), { headers: { "Content-Disposition": 'attachment; filename="job-search-workspace.json"' } });
   if (path.startsWith("versions/") && request.method === "GET") return Response.json({ versions: await store.versions(z.string().uuid().parse(path.slice(9))) });

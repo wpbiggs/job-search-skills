@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { hash, HttpError, publicJobUrl } from "./security.ts";
+import type { Handoff } from "./submissions.ts";
 
 export interface Statement {
   bind(...values: unknown[]): Statement;
@@ -57,7 +58,7 @@ function parseData(kind: Kind, input: unknown): Record<string, unknown> {
 const importSchema = z.object({
   format: z.literal("job-search-workspace"), version: z.literal(1), exported_at: z.iso.datetime(), account: z.unknown().optional(),
   records: z.array(z.object({ id: z.string().uuid(), kind: kindSchema, job_id: z.string().uuid().nullable(), data: z.unknown(), revision: z.number().int().positive(), created_at: z.iso.datetime(), updated_at: z.iso.datetime() }).strict()).min(1).max(250),
-  versions: z.array(z.unknown()).max(50000).optional(), reviews: z.array(z.unknown()).max(250).optional(), outcomes: z.array(z.unknown()).max(250).optional(), events: z.array(z.unknown()).max(200).optional(),
+  versions: z.array(z.unknown()).max(50000).optional(), reviews: z.array(z.unknown()).max(250).optional(), outcomes: z.array(z.unknown()).max(250).optional(), events: z.array(z.unknown()).max(200).optional(), handoffs: z.array(z.unknown()).max(250).optional(),
 }).strict();
 
 /** Untrusted snapshots are preparation only. Never restore authority, credentials, or owner IDs. */
@@ -111,7 +112,7 @@ export async function prepareImport(input: unknown) {
   if (bytes > 2097152) throw new HttpError(413, "Imported preparation exceeds 2 MiB.");
   return { records, summary: { digest: await hash(JSON.stringify(input)), record_count: records.length, counts, bytes, unconfirmed_evidence: evidence.length,
     not_restored: { versions: source.versions?.length ?? 0, reviews: source.reviews?.length ?? 0, outcomes: source.outcomes?.length ?? 0, events: source.events?.length ?? 0 },
-    warnings: ["Preparation only: no credentials, confirmations, approvals, submissions, outcomes, old history or activity are restored.", "New IDs and revision 1 are assigned. Evidence is unconfirmed; reassess and save dependent materials before approval.", "Keep the original export privately if you need its historical assertions. Nothing is sent to employers or scheduled."] } };
+    warnings: ["Preparation only: no credentials, confirmations, approvals, handoffs, submissions, outcomes, old history or activity are restored.", "New IDs and revision 1 are assigned. Evidence is unconfirmed; reassess and save dependent materials before approval.", "Keep the original export privately if you need its historical assertions. Nothing is sent to employers or scheduled."] } };
 }
 
 export class WorkspaceStore {
@@ -244,6 +245,14 @@ export class WorkspaceStore {
   async outcomes(): Promise<Record<string, unknown>[]> {
     return (await this.db.prepare("SELECT job_id,status,note,next_action_at,updated_at FROM outcomes WHERE user_id=?").bind(this.userId).all()).results;
   }
+  async handoffs(): Promise<Handoff[]> {
+    const now = new Date().toISOString();
+    await this.db.prepare("UPDATE submission_intents SET status='expired',updated_at=? WHERE user_id=? AND status='approved' AND expires_at<=?").bind(now, this.userId, now).run();
+    return (await this.db.prepare(`SELECT i.id,i.job_id,i.draft_id,i.job_revision,i.draft_revision,i.profile_id,i.profile_revision,
+      i.destination,i.payload_digest,i.approved_at,i.expires_at,i.status,i.updated_at,
+      a.id AS attempt_id,a.opened_at,a.confirmed_at,a.receipt FROM submission_intents i
+      LEFT JOIN submission_attempts a ON a.intent_id=i.id WHERE i.user_id=? ORDER BY i.approved_at DESC,i.id LIMIT 250`).bind(this.userId).all<Handoff>()).results;
+  }
   async outcome(jobId: string, input: unknown): Promise<void> {
     if (this.actor !== "website") throw new HttpError(403, "Only the candidate can confirm an outcome on the website.");
     const body = z.object({ status: z.enum(["interviewing", "offered", "accepted", "rejected", "withdrawn", "closed"]), note: z.string().trim().min(1).max(2000), next_action_at: z.iso.datetime().nullable() }).strict().parse(input);
@@ -287,7 +296,7 @@ export class WorkspaceStore {
     const account = await this.db.prepare("SELECT name,created_at FROM users WHERE id=?").bind(this.userId).first();
     const events = await this.events();
     const versions = (await this.db.prepare("SELECT record_id,revision,data,saved_at FROM record_versions WHERE user_id=? ORDER BY record_id,revision").bind(this.userId).all<{ record_id: string; revision: number; data: string; saved_at: string }>()).results.map(row => ({ ...row, data: JSON.parse(row.data) }));
-    return { format: "job-search-workspace", version: 1, exported_at: new Date().toISOString(), account, records: await this.list(), versions, reviews: await this.reviews(), outcomes: await this.outcomes(), events };
+    return { format: "job-search-workspace", version: 1, exported_at: new Date().toISOString(), account, records: await this.list(), versions, reviews: await this.reviews(), outcomes: await this.outcomes(), handoffs: await this.handoffs(), events };
   }
   async events(): Promise<Record<string, unknown>[]> {
     return (await this.db.prepare("SELECT actor,action,record_id,created_at FROM events WHERE user_id=? ORDER BY created_at DESC,id DESC LIMIT 200").bind(this.userId).all()).results;

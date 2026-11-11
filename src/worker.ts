@@ -7,6 +7,8 @@ import { workflows } from "./workflows.ts";
 import { BASE, boundedBody, contentSecurityPolicy, escapeHtml, hash, HttpError, jsonBody, sameOrigin, SCOPES, secure, token } from "./security.ts";
 import { kindSchema, saveSchema, WorkspaceStore } from "./store.ts";
 import { SubmissionStore } from "./submissions.ts";
+import { ExecutorStore } from "./executor-store.ts";
+import { executorFixture } from "./executor-fixture.ts";
 
 type Env = Cloudflare.Env;
 const propsSchema = z.object({ userId: z.string().uuid(), epoch: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
@@ -86,6 +88,26 @@ async function api(request: Request, env: Env, path: string, server: OAuthAuthor
   const user = await requireUser(request, env);
   const store = new WorkspaceStore(env.DB, user.id, "website");
   const submissions = new SubmissionStore(store);
+  const executor = new ExecutorStore(store, env.DELEGATED_EXECUTOR, env.EXECUTOR_HOSTS.split(","), env.PUBLIC_ORIGIN);
+  if (path === "executor" && request.method === "GET") return Response.json({ intents: await executor.list(), paused: await executor.paused(), live_submission_enabled: false });
+  if (path === "executor/inspect" && request.method === "POST") {
+    const body = z.object({ job_id: z.string().uuid() }).strict().parse(await jsonBody(request, 1000));
+    return Response.json(await executor.inspect(body.job_id));
+  }
+  if (path === "executor/fixture-check" && request.method === "POST") {
+    z.object({ confirmation: z.literal("FICTIONAL INFRASTRUCTURE TEST ONLY") }).strict().parse(await jsonBody(request, 1000));
+    return Response.json(await executor.fixtureCheck());
+  }
+  if (path === "executor/approve" && request.method === "POST") return Response.json(await executor.approve(await jsonBody(request, 90000)));
+  if (path === "executor/action" && request.method === "POST") {
+    const body = z.object({ id: z.string().uuid(), action: z.enum(["run", "cancel"]) }).strict().parse(await jsonBody(request, 1000));
+    if (body.action === "cancel") { await executor.cancel(body.id); return Response.json({ ok: true }); }
+    return Response.json(await executor.run(body.id));
+  }
+  if (path === "executor/pause" && request.method === "POST") {
+    const body = z.object({ paused: z.boolean() }).strict().parse(await jsonBody(request, 1000));
+    await executor.pause(body.paused); return Response.json({ ok: true });
+  }
   if (path === "handoffs" && request.method === "GET") return Response.json({ handoffs: await submissions.list() });
   if (path === "handoffs/preview" && request.method === "POST") {
     const body = z.object({ job_id: z.string().uuid(), draft_id: z.string().uuid() }).strict().parse(await jsonBody(request, 1000));
@@ -162,7 +184,8 @@ export default {
         const ip = request.headers.get("CF-Connecting-IP") ?? "local";
         const limiter = isAuth ? env.AUTH_LIMIT : env.REQUEST_LIMIT;
         if (!(await limiter.limit({ key: await hash(`${ip}:${isAuth ? "auth" : "requests"}`) })).success) throw new HttpError(429, "Too many requests. Try again in a minute.");
-        if (url.pathname === `${BASE}/oauth/authorize`) response = await authorize(request, env, server);
+        if (url.pathname === `${BASE}/workspace/executor-fixture`) response = await executorFixture(request);
+        else if (url.pathname === `${BASE}/oauth/authorize`) response = await authorize(request, env, server);
         else if (url.pathname.startsWith(`${BASE}/api/`)) response = await api(request, env, url.pathname.slice(`${BASE}/api/`.length), server);
         else if (url.pathname === `${BASE}/mcp` || url.pathname === `/.well-known/oauth-protected-resource${BASE}/mcp`) {
           const resource = new OAuthResourceServer<Env, Props>({

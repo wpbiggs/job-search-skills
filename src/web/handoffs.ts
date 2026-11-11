@@ -7,7 +7,7 @@ type Snapshot = Awaited<ReturnType<SubmissionStore["snapshot"]>>;
 
 export async function mountHandoffs(section: Element, jobId: string, drafts: RecordRow[], api: Api, refresh: () => Promise<void>, busy: (action: () => Promise<void>) => Promise<void>) {
   const box = document.createElement("section"); box.className = "box";
-  box.innerHTML = `<h2>Reviewed application handoff</h2><p>You perform all employer-site actions, including uploads, answers, consent and the final submission. This service never fills forms or contacts employers. Approval here is <strong>not permission for an agent to submit</strong>.</p><p>Review one saved document at a time. A handoff does not include other drafts or screening answers. Confirm the exact destination and all additional materials yourself. Opening a link can follow employer redirects; stop if the employer or role changes.</p><div data-handoff-list role="status">Loading handoffs…</div>${drafts.length ? `<label for="handoff-draft">Saved document to review</label><select id="handoff-draft">${drafts.map(draft => `<option value="${draft.id}">${esc(draft.data.type)} · version ${draft.revision}</option>`).join("")}</select><button id="handoff-preview" class="secondary">Review saved handoff</button><div id="handoff-preview-content"></div>` : '<p>Save a draft against your current, confirmed profile first.</p>'}`;
+  box.innerHTML = `<h2>Reviewed application handoff</h2><p>You perform all employer-site actions, including uploads, answers, consent and the final submission. This service never fills forms or contacts employers. Approval here is <strong>not permission for an agent to submit</strong>.</p><p>Review one saved document at a time. A handoff does not include other drafts or screening answers. Confirm the exact destination and all additional materials yourself. Opening a link can follow employer redirects; stop if the employer or role changes.</p><div data-handoff-list role="status">Loading handoffs…</div>${drafts.length ? `<label for="handoff-draft">Saved document to review</label><select id="handoff-draft">${drafts.map(draft => `<option value="${draft.id}">${esc(draft.data.type)} · version ${draft.revision}</option>`).join("")}</select><button id="handoff-preview" class="secondary" disabled>Review saved handoff</button><div id="handoff-preview-content"></div>` : '<p>Save a draft against your current, confirmed profile first.</p>'}`;
   section.append(box);
   const { handoffs } = await api<{ handoffs: Handoff[] }>("handoffs");
   if (!box.isConnected) return;
@@ -44,4 +44,6 @@ export async function mountHandoffs(section: Element, jobId: string, drafts: Rec
     if (!box.querySelector<HTMLInputElement>(`#confirm-${id}`)!.checked) throw new Error("Confirm that you personally submitted and saw an employer confirmation.");
     await api("handoffs/action", "POST", { id, action: "confirm", receipt: box.querySelector<HTMLTextAreaElement>(`#receipt-${id}`)!.value, confirmation: "I SUBMITTED THIS APPLICATION" }); await refresh();
   })));
+  const preview = box.querySelector<HTMLButtonElement>("#handoff-preview");
+  if (preview) preview.disabled = false;
 }

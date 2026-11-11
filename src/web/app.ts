@@ -4,6 +4,7 @@ import { escapeHtml as esc } from "../security.ts";
 import type { RecordRow, WorkspaceStore } from "../store.ts";
 import { mountHandoffs } from "./handoffs.ts";
 import type { Handoff } from "../submissions.ts";
+import { mountExecutor } from "./executor.ts";
 
 type State = { user: { name: string; created_at: string }; usage: Awaited<ReturnType<WorkspaceStore["usage"]>>; records: RecordRow[]; handoffs: Handoff[]; reviews: { job_id: string; action: string; draft_id: string; draft_revision: number; destination: string; confirmation: string; current: boolean; updated_at: string }[]; outcomes: { job_id: string; status: string; note: string; next_action_at: string | null; updated_at: string }[]; connections: { id: string; clientId: string; scope: string[]; current: boolean }[] };
 type Evidence = { id: string; claim: string; source: string; confirmed: boolean };
@@ -115,6 +116,9 @@ function wireSection() {
     const section = document.createElement("section"); section.className = "box";
     section.innerHTML = "<h2>Application handoff history</h2><p>Up to 250 handoffs per account store record identities/revisions, destination, content digest, status, timestamps and an optional candidate-reported receipt (500 characters). This separate metadata is not counted in preparation byte usage. It is included in your export and can be read by assistants you authorize. Do not put secrets in receipt notes.</p><p>Delete the linked job/draft or your workspace to erase handoff history. Removing a profile invalidates pending handoffs but does not erase their metadata. Handoffs never submit, upload or withdraw an employer application.</p>";
     document.querySelector("#section")!.prepend(section);
+    const executorPrivacy = document.createElement("section"); executorPrivacy.className = "box";
+    executorPrivacy.innerHTML = "<h2>Browser executor privacy and limits</h2><p>The separately deployed browser service uses fresh isolated sessions with no imported credentials. Explicit inspections contact the allowlisted employer website without candidate fields. No live employer submission adapter is enabled. Fictional ATS tests cannot count as real applications.</p><p>Executor authorizations can store exact field/document payloads in the same non-end-to-end-encrypted database (50 intents and 1 MiB of payloads/account, separate from preparation byte usage), plus form snapshots, hashes, status and at most one attempt/receipt each. These are included in private exports but never restored by preparation import. Delete the linked job/draft or workspace to erase them; profile removal invalidates pending authority. Never store secrets or sensitive screening answers. Browser budget metadata contains only day/count and is retained at most 90 days.</p>";
+    document.querySelector("#section")!.prepend(executorPrivacy);
   }
   const importFile = document.querySelector<HTMLInputElement>("#import-file");
   if (importFile) {
@@ -180,6 +184,7 @@ function wireSection() {
     const section = document.querySelector(".split > section"), current = state!.outcomes.find(item => item.job_id === selectedJob);
     if (section) {
       void mountHandoffs(section, selectedJob, records("draft").filter(record => record.job_id === selectedJob), api, refresh, busy).catch(error => message(error instanceof Error ? error.message : "Handoffs unavailable. Refresh before continuing."));
+      void mountExecutor(section, selectedJob, api, busy, refresh).catch(error => message(error instanceof Error ? error.message : "Executor unavailable. Live submission remains locked."));
       const box = document.createElement("section"); box.className = "box";
       box.innerHTML = `<h2>Outcome &amp; next step</h2><p>Record an event you personally know happened. This does not send a message, accept an offer, or create a scheduled reminder.</p>${current ? `<p><span class="badge success">Candidate-recorded: ${esc(current.status)}</span></p><p>${esc(current.note)}</p>${current.next_action_at ? `<small>Next action noted for ${esc(current.next_action_at)}</small>` : ""}` : ""}<form id="outcome-form"><label for="outcome-status">Known outcome</label><select id="outcome-status">${["interviewing", "offered", "accepted", "rejected", "withdrawn", "closed"].map(status => `<option ${current?.status === status ? "selected" : ""}>${status}</option>`).join("")}</select>${area("outcome-note", "What happened / next step", current?.note ?? "", true)}${field("outcome-date", "Optional next-action date (your local timezone)", "", "datetime-local")}<button>Record my outcome</button></form>`;
       section.append(box);

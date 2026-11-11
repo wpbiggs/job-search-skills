@@ -18,6 +18,7 @@ async function setupUser(name) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, permissions: ["clipboard-read", "clipboard-write"] });
   contexts.push(context);
   const page = await context.newPage();
+  page.setDefaultTimeout(20000);
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   await cdp.send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
@@ -217,6 +218,26 @@ try {
   for (const record of [handoffJob, handoffProfile]) assert.equal((await webApi(other.page, `records/${record.id}`, "DELETE", { confirmation: "DELETE RECORD", expected_revision: 1 })).status, 200);
   assert.deepEqual((await webApi(other.page, "handoffs")).body.handoffs, []);
   results.push("Exact saved handoff review, unsaved edit denial, token/CSRF/owner isolation, concurrent one-use D1 claims, synthetic ATS manual final click, mobile receipt confirmation, read-only MCP tracker/export and cascading cleanup");
+  const executorState = await webApi(other.page, "executor");
+  assert.equal(executorState.status, 200); assert.equal(executorState.body.live_submission_enabled, false);
+  assert.deepEqual(executorState.body.intents, []);
+  const executorTokenOnly = await fetch(`${origin}/job-search/api/executor/fixture-check`, { method: "POST", headers: { Authorization: `Bearer ${readOnly.tokens.access_token}`, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ confirmation: "FICTIONAL INFRASTRUCTURE TEST ONLY" }) });
+  assert.equal(executorTokenOnly.status, 401);
+  const executorCsrf = await other.context.request.post(`${origin}/job-search/api/executor/pause`, { headers: { Origin: "https://untrusted.example" }, data: { paused: true } });
+  assert.equal(executorCsrf.status(), 403);
+  assert.equal((await webApi(other.page, "executor/pause", "POST", { paused: true })).status, 200);
+  assert.equal((await webApi(other.page, "executor/fixture-check", "POST", { confirmation: "FICTIONAL INFRASTRUCTURE TEST ONLY" })).status, 409);
+  assert.equal((await webApi(other.page, "executor/pause", "POST", { paused: false })).status, 200);
+  if (process.env.EXECUTOR_REMOTE_SMOKE === "1") {
+    const synthetic = await webApi(other.page, "executor/fixture-check", "POST", { confirmation: "FICTIONAL INFRASTRUCTURE TEST ONLY" });
+    assert.equal(synthetic.status, 200, JSON.stringify(synthetic.body));
+    assert.equal(synthetic.body.status, "fixture_verified", JSON.stringify(synthetic.body));
+    assert.equal(synthetic.body.receipt.synthetic, true);
+    assert.match(synthetic.body.receipt.id, /^fixture-[a-f0-9]{64}$/);
+    assert.equal((await webApi(other.page, "state")).body.reviews.length, 0);
+    results.push("Actual private service binding and isolated Cloudflare browser completed an owned synthetic ATS test; synthetic receipt is not an employer submission");
+  }
+  results.push("Executor token/CSRF boundaries, candidate pause control, isolated state and locked live final submission");
   // Keep the expanded fixture suite within the real 120/minute production limit.
   // Do not disable the limiter in tests or widen it for a release.
   await new Promise(resolve => setTimeout(resolve, 61_000));

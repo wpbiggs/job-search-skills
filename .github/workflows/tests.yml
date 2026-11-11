@@ -23,10 +23,12 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - run: npx wrangler types
+      - run: npm run types
       - run: npm run typecheck
       - run: npm test
       - run: npm audit --omit=dev
       - run: npm run build
+      - run: npm run build:executor
       - run: npx playwright install --with-deps chromium
+      - run: npm run test:executor
       - run: npm run test:worker

@@ -58,7 +58,7 @@ function parseData(kind: Kind, input: unknown): Record<string, unknown> {
 const importSchema = z.object({
   format: z.literal("job-search-workspace"), version: z.literal(1), exported_at: z.iso.datetime(), account: z.unknown().optional(),
   records: z.array(z.object({ id: z.string().uuid(), kind: kindSchema, job_id: z.string().uuid().nullable(), data: z.unknown(), revision: z.number().int().positive(), created_at: z.iso.datetime(), updated_at: z.iso.datetime() }).strict()).min(1).max(250),
-  versions: z.array(z.unknown()).max(50000).optional(), reviews: z.array(z.unknown()).max(250).optional(), outcomes: z.array(z.unknown()).max(250).optional(), events: z.array(z.unknown()).max(200).optional(), handoffs: z.array(z.unknown()).max(250).optional(),
+  versions: z.array(z.unknown()).max(50000).optional(), reviews: z.array(z.unknown()).max(250).optional(), outcomes: z.array(z.unknown()).max(250).optional(), events: z.array(z.unknown()).max(200).optional(), handoffs: z.array(z.unknown()).max(250).optional(), executor: z.array(z.unknown()).max(50).optional(),
 }).strict();
 
 /** Untrusted snapshots are preparation only. Never restore authority, credentials, or owner IDs. */
@@ -296,7 +296,9 @@ export class WorkspaceStore {
     const account = await this.db.prepare("SELECT name,created_at FROM users WHERE id=?").bind(this.userId).first();
     const events = await this.events();
     const versions = (await this.db.prepare("SELECT record_id,revision,data,saved_at FROM record_versions WHERE user_id=? ORDER BY record_id,revision").bind(this.userId).all<{ record_id: string; revision: number; data: string; saved_at: string }>()).results.map(row => ({ ...row, data: JSON.parse(row.data) }));
-    return { format: "job-search-workspace", version: 1, exported_at: new Date().toISOString(), account, records: await this.list(), versions, reviews: await this.reviews(), outcomes: await this.outcomes(), handoffs: await this.handoffs(), events };
+    const executor = (await this.db.prepare(`SELECT i.id,i.job_id,i.draft_id,i.profile_id,i.job_revision,i.draft_revision,i.profile_revision,i.destination,i.snapshot_digest,i.payload_digest,i.form,i.payload,i.status,i.reason,i.created_at,i.expires_at,i.updated_at,a.id AS attempt_id,a.started_at,a.finished_at,a.receipt
+      FROM delegated_intents i LEFT JOIN delegated_attempts a ON a.intent_id=i.id WHERE i.user_id=? ORDER BY i.created_at DESC LIMIT 50`).bind(this.userId).all<{form:string;payload:string;receipt:string|null}>()).results.map(row => ({ ...row, form: JSON.parse(row.form), payload: JSON.parse(row.payload), receipt: row.receipt ? JSON.parse(row.receipt) : null }));
+    return { format: "job-search-workspace", version: 1, exported_at: new Date().toISOString(), account, records: await this.list(), versions, reviews: await this.reviews(), outcomes: await this.outcomes(), handoffs: await this.handoffs(), executor, events };
   }
   async events(): Promise<Record<string, unknown>[]> {
     return (await this.db.prepare("SELECT actor,action,record_id,created_at FROM events WHERE user_id=? ORDER BY created_at DESC,id DESC LIMIT 200").bind(this.userId).all()).results;

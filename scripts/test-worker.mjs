@@ -18,7 +18,7 @@ const run = (file, args, env = process.env) => new Promise((resolve, reject) => 
 let worker;
 try {
   await run(wrangler, ["d1", "migrations", "apply", "DB", "--local", "--persist-to", directory]);
-  worker = spawn(process.execPath, [wrangler, "dev", "--port", String(port), "--ip", "localhost", "--persist-to", directory, "--var", `PUBLIC_ORIGIN:${origin}`, "--var", "RP_ID:localhost", "--infer-origin-from-routes=false", "--show-interactive-dev-session=false"], { stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32" });
+  worker = spawn(process.execPath, [wrangler, "dev", "--config", "wrangler.jsonc", "--config", "services/application-executor/wrangler.jsonc", "--port", String(port), "--ip", "localhost", "--persist-to", directory, "--var", `PUBLIC_ORIGIN:${origin}`, "--var", "RP_ID:localhost", "--infer-origin-from-routes=false", "--show-interactive-dev-session=false"], { stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32" });
   await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("Fixture Worker did not become ready")), 60000);
     const accept = chunk => { if (chunk.toString().includes("Ready on")) { clearTimeout(timeout); resolve(); } };

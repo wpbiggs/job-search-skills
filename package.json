@@ -6,10 +6,14 @@
   "description": "Private job-search records and MCP tools for the AI assistant you choose",
   "scripts": {
     "dev": "wrangler dev --port 8791 --ip localhost --var PUBLIC_ORIGIN:http://localhost:8791 --var RP_ID:localhost --infer-origin-from-routes=false",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p services/application-executor/tsconfig.json",
+    "types": "wrangler types && wrangler types --config services/application-executor/wrangler.jsonc --env-interface ExecutorBindings services/application-executor/worker-configuration.d.ts",
+    "build:executor": "wrangler deploy --dry-run --config services/application-executor/wrangler.jsonc",
+    "deploy:executor": "wrangler deploy --config services/application-executor/wrangler.jsonc",
     "test": "node --import tsx --test test/*.test.ts",
     "test:browser": "node test/browser.mjs",
     "test:worker": "node scripts/test-worker.mjs",
+    "test:executor": "node --import tsx scripts/test-executor-browser.mjs",
     "build": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
     "mcp:local": "tsx src/local.ts"
@@ -18,6 +22,7 @@
     "node": ">=24.0.0"
   },
   "dependencies": {
+    "@cloudflare/playwright": "1.4.0",
     "@cloudflare/workers-oauth-provider": "1.2.4",
     "@modelcontextprotocol/client": "2.4.0",
     "@modelcontextprotocol/server": "2.4.0",

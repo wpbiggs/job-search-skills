@@ -1,0 +1,19 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "job-application-executor",
+  "main": "worker.ts",
+  "account_id": "b7019b91654de6e62fb986cd0864cba2",
+  "compatibility_date": "2026-11-10",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "browser": { "binding": "BROWSER" },
+  "d1_databases": [{ "binding": "DB", "database_name": "job-search-workspace", "database_id": "8fa1f985-c680-406e-96d8-465bfbd4516b" }],
+  "vars": {
+    "FIXTURE_ORIGIN": "https://william.biggers.family",
+    "ALLOWED_HOSTS": "william.biggers.family,job-boards.greenhouse.io,boards.greenhouse.io,jobs.lever.co,jobs.ashbyhq.com",
+    "LIVE_SUBMISSION_ENABLED": "false",
+    "EXECUTOR_DISABLED": "false"
+  },
+  "observability": { "enabled": true, "redact_query_string": true, "logs": { "enabled": true, "invocation_logs": true }, "traces": { "enabled": true, "head_sampling_rate": 0.05 } }
+}

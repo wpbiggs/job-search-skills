@@ -46,6 +46,17 @@ The explicit remote-smoke option creates only fictional users and runs one contr
 
 An additive migration does not require rewriting existing preparation records. Rolling back Worker code can leave these unused tables safely in place; do not restore the entire database and revive deleted records/grants. Per-account pause stops new work and denies a pre-commit final gate. Operator `EXECUTOR_DISABLED=true` disables new private service calls; existing bounded invocations cannot be recalled after an irreversible commit. Scheduling remains absent and independently disabled.
 
+## Verified deployment evidence (2026-11-11 UTC)
+
+- Production migration `0005_executor.sql` applied. Private executor version: `104bb5ae-c041-41fa-8eba-2e1f80e0342e`; workspace version: `fed31e44-4b57-4b2b-a3c3-d3563a1cd5e7` (async review controls fixed in commit `5e298e6`).
+- Local verification passed: 53 Node tests, 17 Python tests, typechecks, both dry-run bundles, 11 real Chromium/owned HTTPS ATS scenarios and the isolated multi-worker workerd suite.
+- Full deployed browser/OAuth/MCP regression passed all 20 groups at `2026-11-11T01:44:24.147Z`, using fictional accounts only. This supersedes the earlier timeout failures; a delayed-response regression covers the review-button handler-readiness bug.
+- The focused actual Cloudflare-browser check independently verified the owned ATS upload and synthetic receipt at `2026-11-11T01:38:13.362Z`. Receipt: `fixture-8e5a22c39d7ff2d24f29870e5c4d42017ce753f039c245e8c7542e1f347b98f3`; response SHA-256: `069fc844172b484e3f81cf458bdd3904db2ce511feedd534d0058581b74ba5db`. **Not an employer receipt.**
+- Post-regression read-only metadata check found zero fictional fixture accounts, executor intents, executor attempts and active browser leases. No candidate record bodies were read or modified for cleanup.
+- Public smoke checks returned HTTP 200 for the portfolio, workspace, fictional fixture and OAuth discovery; unauthenticated executor/state/MCP requests returned HTTP 401.
+- GitHub-hosted CI is blocked, not passed: check-run `130262124897` reports that the account is locked due to a billing issue. Local and deployed checks do not replace a hosted-CI result.
+- [Draft PR #3](https://github.com/wpbiggs/job-search-skills/pull/3) remains draft and [issue #2](https://github.com/wpbiggs/job-search-skills/issues/2) remains open. Real pilot outcome: **0/5 employer applications, zero employer receipts, zero employer messages and zero interviews claimed.**
+
 ## Remaining gates before a real five-application pilot
 
 1. Deliberately review/revise the current final-action project contract, without allowing an assistant to approve its own payloads or attest to legal/sensitive matters.

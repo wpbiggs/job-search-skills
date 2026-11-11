@@ -39,9 +39,10 @@ npx wrangler d1 migrations apply DB --remote
 npm run deploy:executor
 npm run deploy
 EXECUTOR_REMOTE_SMOKE=1 WORKSPACE_ORIGIN=https://william.biggers.family npm run test:browser
+WORKSPACE_ORIGIN=https://william.biggers.family npm run check:executor:deployed
 ```
 
-The explicit remote-smoke option creates only fictional users and runs one controlled ATS check through the actual private service binding and Cloudflare browser. It consumes one of the ten daily browser slots. The normal local suite does not launch a remote browser. Verify authentication, OAuth/MCP, existing portfolio routing, owner isolation and fixture cleanup. Do not erase or query real candidate bodies for a cleanup check.
+The explicit remote-smoke option creates only fictional users and runs one controlled ATS check through the actual private service binding and Cloudflare browser. The focused deployed check verifies just that Cloudflare path and fixture-account cleanup without depending on the broader OAuth/MCP test sequence. Each consumes one of the ten daily browser slots; use one as appropriate, not both by default. The normal local suite does not launch a remote browser. Verify authentication, OAuth/MCP, existing portfolio routing, owner isolation and fixture cleanup. Do not erase or query real candidate bodies for a cleanup check.
 
 An additive migration does not require rewriting existing preparation records. Rolling back Worker code can leave these unused tables safely in place; do not restore the entire database and revive deleted records/grants. Per-account pause stops new work and denies a pre-commit final gate. Operator `EXECUTOR_DISABLED=true` disables new private service calls; existing bounded invocations cannot be recalled after an irreversible commit. Scheduling remains absent and independently disabled.
 

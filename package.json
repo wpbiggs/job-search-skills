@@ -14,6 +14,7 @@
     "test:browser": "node test/browser.mjs",
     "test:worker": "node scripts/test-worker.mjs",
     "test:executor": "node --import tsx scripts/test-executor-browser.mjs",
+    "check:executor:deployed": "node scripts/check-executor-deployed.mjs",
     "build": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
     "mcp:local": "tsx src/local.ts"

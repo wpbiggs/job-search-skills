@@ -174,8 +174,17 @@ try {
   assert.equal(tokenHandoff.status, 401);
   const handoffCsrf = await other.context.request.post(`${origin}/job-search/api/handoffs/approve`, { headers: { Origin: "https://untrusted.example" }, data: handoffInput });
   assert.equal(handoffCsrf.status(), 403);
+  let releaseHandoff;
+  const handoffGate = new Promise(resolve => { releaseHandoff = resolve; });
+  const delayedHandoffs = async route => { await handoffGate; await route.continue(); };
+  await other.page.route("**/job-search/api/handoffs", delayedHandoffs);
+  const handoffRequest = other.page.waitForRequest(request => request.url().endsWith("/job-search/api/handoffs"));
   await other.page.getByRole("button", { name: "Jobs & drafts", exact: true }).click();
+  await handoffRequest;
+  assert.equal(await other.page.getByRole("button", { name: "Review saved handoff", exact: true }).isDisabled(), true, "Async controls must stay disabled until metadata and handlers are ready");
+  releaseHandoff();
   await other.page.getByRole("button", { name: "Review saved handoff", exact: true }).click();
+  await other.page.unroute("**/job-search/api/handoffs", delayedHandoffs);
   await other.page.getByRole("heading", { name: "Exact saved document", exact: true }).waitFor();
   await other.page.locator("#approve-handoff-check").check();
   await other.page.locator(`#draft-${handoffDraft.id}`).fill("Unsaved fictional change");
@@ -397,6 +406,9 @@ try {
   await mkdir("test-results", { recursive: true });
   await writeFile("test-results/browser.json", JSON.stringify({ origin, verifiedAt: new Date().toISOString(), results, fixtureDataOnly: true }, null, 2) + "\n");
   console.log(JSON.stringify({ origin, results, fixtureDataOnly: true }, null, 2));
+} catch (error) {
+  console.error(JSON.stringify({ fixtureOnly: true, verifiedGroupsBeforeFailure: results, errorClass: error?.name ?? "UnknownError" }, null, 2));
+  throw error;
 } finally {
   for (const client of clients) await client.close().catch(() => {});
   for (const context of contexts) {

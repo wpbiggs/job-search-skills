@@ -11,6 +11,9 @@ With Job Search MCP connected, inspect existing jobs with `list_records`/`get_re
 ## Inputs
 A confirmed career search brief and permission to research named sites or an agreed domain scope. Requires web tools for live discovery; without them, request URLs or pasted postings and do not claim a live search occurred.
 
+## Federal civilian and defense track
+When the candidate opts into military-adjacent, federal civilian, or defense contracting work, also follow `docs/FEDERAL_DEFENSE_DISCOVERY.md` in this repository for USAJOBS hiring paths, contractor sources, clearance status, eligibility gates, and daily research digest behavior. The scheduling agent is external to this toolkit; do not claim this document alone schedules research.
+
 ## Workflow
 1. Turn target role families and constraints into a small query set, including adjacent titles supported by transferable experience.
 2. Search agreed sources. Prefer the employer's own careers page; aggregators are discovery leads, not proof of a current vacancy.

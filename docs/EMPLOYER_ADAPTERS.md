@@ -44,6 +44,16 @@ npm run check:greenhouse:deployed
 
 This consumes one metadata-read slot and contacts the specified public job API. It never uploads applicant materials or submits to an employer. Evidence is written to ignored `test-results/greenhouse-deployed.json`. The normal regression suite does not contact real employers.
 
+## Verified preflight milestone (2026-11-25 UTC)
+
+- Initial implementation commit: `d9b5686`. Workspace version: `0911f549-40f2-4fb7-85f8-db5a4721a4fb`.
+- Equivalent numeric/string option values are rejected by follow-up commit `759eada`; private executor version: `27cf1d12-2ed3-4003-8878-71441f4169ad`. All 15 provider-specific tests passed again before that deployment.
+- Typechecks, 73 Node tests (15 Greenhouse-specific), 17 Python tests, both Worker bundles, the 11 owned HTTPS ATS browser scenarios and isolated workerd integration suite passed.
+- The deployed phone-viewport preflight check passed initially at `2026-11-25T17:39:26.308Z` and again against the final private service at `2026-11-25T17:41:22.489Z` for an explicitly scoped public hosted opening. It verified eight question groups, three intervention entries, no applicant-data entry, no application intent/review/handoff, and fixture-account deletion. It is **not** an employer submission or receipt test.
+- All 20 deployed browser/OAuth/MCP regression groups passed at `2026-11-25T17:41:09.118Z`. Post-run metadata checks found zero fictional accounts, executor intents/attempts and active browser leases; no candidate record bodies were accessed for cleanup.
+- Public metadata inspection is now implemented. Exact-payload approval, rendered employer execution, interactive takeover, provider receipt verification and the real application pilot are not completed by this milestone.
+- GitHub check-run `139391310126` reports an account billing lock; hosted CI is blocked, not passed.
+
 ## Unfinished execution work
 
 1. Candidate-owned exact ordinary-field/document/skip package review and durable approval bound to job, profile, document and rendered-form revisions. A preflight digest alone authorizes nothing.

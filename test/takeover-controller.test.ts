@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { TakeoverController, validLiveView, type TakeoverState, type TakeoverDependencies } from "../src/takeover-controller.ts";
+import { TakeoverController, TAKEOVER_LINK_TTL, validLiveView, type TakeoverState, type TakeoverDependencies } from "../src/takeover-controller.ts";
 
 function fixture() {
   let state: TakeoverState | null = null, alarm: number | null = null, now = 1000000, allowed = true, reserved = true, closes = 0, releases = 0, starts = 0;
@@ -118,4 +118,16 @@ test("trusted owner revocation closes the old epoch without granting the replace
   await assert.rejects(f.controller.view({ ...f.owner, epoch: "c".repeat(64) }, started.id), /matching/);
   await assert.rejects(f.controller.revokeOwner(crypto.randomUUID()), /mismatch/);
   assert.equal((await f.controller.revokeOwner(f.owner.user_id))?.phase, "closed"); assert.equal(f.state(), null);
+});
+test("Live View honors the documented provider minimum without extending the absolute authorization deadline", async () => {
+  const f = fixture(), started = await f.controller.start(f.owner); let calls = 0;
+  f.deps.driver.view = async (_session, ttl) => { calls++; assert.equal(ttl, 60000); assert.equal(ttl, TAKEOVER_LINK_TTL); return "https://live.browser.run/ui/view?mode=tab&wss=FICTIONAL"; };
+  await f.controller.view(f.owner, started.id); assert.equal(calls, 1);
+  f.advance(60001); await assert.rejects(f.controller.view(f.owner, started.id), /Too little authorized time/);
+  assert.equal(calls, 1); assert.equal(f.state()?.expires_at, Date.parse(started.expires_at));
+});
+test("a slow provider mint cannot push the connection window past the original deadline", async () => {
+  const f = fixture(), started = await f.controller.start(f.owner); f.advance(59000);
+  f.deps.driver.view = async () => { f.advance(2000); return "https://live.browser.run/ui/view?mode=tab&wss=LATE"; };
+  await assert.rejects(f.controller.view(f.owner, started.id), /changed/); assert.equal(f.closes(), 1); assert.equal(f.state(), null);
 });

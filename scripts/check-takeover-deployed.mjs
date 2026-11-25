@@ -11,7 +11,7 @@ const cdp = await context.newCDPSession(page);
 await cdp.send("WebAuthn.enable");
 await cdp.send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
 const api = (body) => context.request.post(`${origin}/job-search/api/executor/takeover`, { headers: { Origin: origin }, data: body, timeout: 60000 });
-let deleted = false, id, socket;
+let deleted = false, id, socket, stage = "register", lastHttpStatus;
 try {
   await page.goto(`${origin}/job-search/workspace`, { waitUntil: "networkidle" });
   await page.getByLabel("Workspace name (a nickname is fine)").fill(`Takeover cloud fixture ${Date.now()}`);
@@ -19,28 +19,34 @@ try {
   await page.getByRole("button", { name: "Create with a passkey", exact: true }).click();
   await page.getByRole("heading", { name: "Save your recovery code now", exact: true }).waitFor();
   await page.getByRole("button", { name: "I saved it safely", exact: true }).click();
+  stage = "start";
   const start = await api({ action: "start_fixture", confirmation: "FICTIONAL TAKEOVER ONLY — NO PERSONAL DATA" });
   assert.equal(start.status(), 200, "Fictional start failed; no automatic retry allowed");
   const started = await start.json(); id = started.takeover.id;
   assert.equal(started.takeover.phase, "paused"); assert.equal(started.takeover.execution_enabled, false);
   assert.equal(JSON.stringify(started).includes("session_id"), false);
   const status = await api({ action: "status" }); assert.equal((await status.json()).takeover.id, id);
+  stage = "view";
   const view = await api({ action: "view", id, confirmation: "OPEN PRIVATE FICTIONAL CONTROL" });
+  lastHttpStatus = view.status();
   assert.equal(view.status(), 200, "Private view capability unavailable");
   const ticket = await view.json();
   // Bearer capability remains in memory. Never print it, record network traces, or save screenshots.
+  stage = "parse-control-transport";
   const frontend = new URL(ticket.live_view_url);
   assert.ok(frontend.protocol === "https:" && frontend.hostname === "live.browser.run", "Unexpected control UI origin");
   const endpoint = frontend.searchParams.get("wss");
   assert.ok(endpoint, "Provider control URL did not contain the expected socket transport");
   const wsUrl = new URL(endpoint.startsWith("wss://") ? endpoint : `wss://${endpoint}`);
-  assert.ok(wsUrl.protocol === "wss:" && wsUrl.hostname === "api.cloudflare.com", "Unexpected control socket origin");
+  assert.ok(wsUrl.protocol === "wss:" && wsUrl.hostname === "live.browser.run" && wsUrl.pathname.startsWith("/api/devtools/browser/"), "Unexpected control socket origin");
+  stage = "connect-viewer";
   socket = new WebSocket(wsUrl);
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error("Private socket did not connect")), 15000);
     socket.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
     socket.addEventListener("error", () => { clearTimeout(timer); reject(Error("Private socket connection failed")); }, { once: true });
   });
+  stage = "viewer-read-only-request";
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error("Connected viewer did not answer a read-only protocol request")), 10000);
     const listener = event => {
@@ -58,20 +64,27 @@ try {
     socket.addEventListener("close", () => { clearTimeout(timer); resolve(); }, { once: true });
   });
   void closedSocket.catch(() => {}); // Cleanup failures must not become unhandled capability-bearing errors.
+  stage = "cancel-and-confirm-viewer-closure";
   const cancelled = await api({ action: "cancel", id });
   assert.equal(cancelled.status(), 200);
   assert.equal((await cancelled.json()).takeover.phase, "closed", "Browser revocation must be confirmed, not merely requested");
   await closedSocket;
+  stage = "stale-generation-and-export";
   const oldLink = await api({ action: "view", id, confirmation: "OPEN PRIVATE FICTIONAL CONTROL" });
   assert.notEqual(oldLink.status(), 200, "Cancelled generation cannot mint another link");
   assert.equal((await (await api({ action: "status" })).json()).takeover, null);
   const exported = await (await context.request.get(`${origin}/job-search/api/export`)).text();
   assert.equal(exported.includes("live.browser.run"), false); assert.equal(exported.includes("session_id"), false);
+  stage = "erase-fixture";
   const remove = await context.request.post(`${origin}/job-search/api/delete`, { headers: { Origin: origin }, data: { confirmation: "DELETE MY WORKSPACE" } });
   assert.equal(remove.status(), 200); deleted = true;
   const evidence = { checkedAt: new Date().toISOString(), origin, fictionalOnly: true, employerRequests: 0, applicantDataEntered: false, structuredPauseVerified: true, establishedViewerClosedOnCancel: true, staleGenerationDenied: true, controlCapabilitiesExcludedFromExport: true, fixtureAccountDeleted: true, actualApplicationsSubmitted: 0 };
   await mkdir("test-results", { recursive: true }); await writeFile("test-results/takeover-deployed.json", JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify(evidence, null, 2));
+} catch (error) {
+  // URL/parser/transport errors can carry bearer-bearing input. Never print the error or stack.
+  console.error(JSON.stringify({ fictionalTakeoverCheckFailed: true, stage, lastHttpStatus, errorClass: error instanceof Error ? error.name : "unknown", automaticRetry: false }));
+  process.exitCode = 1;
 } finally {
   socket?.close();
   if (id) await api({ action: "cancel", id }).catch(() => undefined);

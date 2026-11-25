@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { connect, launch, sessions, type Browser } from "@cloudflare/playwright";
 import { claimInspectionBudget } from "../../src/executor-budget.ts";
 import { TakeoverController, type TakeoverDriver, type TakeoverOwner, type TakeoverSession, type TakeoverState } from "../../src/takeover-controller.ts";
+import { HttpError } from "../../src/security.ts";
 
 const fixtureHtml = `<!doctype html><html lang="en"><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'"><title>Fictional takeover practice</title><style>body{font:18px system-ui;max-width:620px;margin:40px auto;padding:20px}input{font:inherit;padding:10px}</style><h1>Fictional takeover practice</h1><p>No employer application is open. Use fictional values only. Do not enter credentials, personal information, legal answers or documents.</p><label for="practice">Practice code — enter FIXTURE only</label><p><input id="practice" autocomplete="off"></p><p>Return to your workspace to end this practice session. Ending it closes the browser; it never resumes automation or authorizes a submission.</p><button disabled>No application submission is available</button></html>`;
 
@@ -36,18 +37,25 @@ export class FixtureTakeoverDriver implements TakeoverDriver {
     }
   }
   async view(session: TakeoverSession, expiresInMs: number): Promise<string> {
-    const browser = await this.browser(session.session_id);
-    const page = browser.contexts().flatMap(context => context.pages()).find(page => page.url() === "about:blank");
-    if (!page) throw Error("Practice target missing");
-    const cdp = await page.context().newCDPSession(page);
+    let stage = "connect";
     try {
-      const { targetInfo } = await cdp.send("Target.getTargetInfo");
-      if (targetInfo.targetId !== session.target_id) throw Error("Practice target changed");
-      const handoff = await cdp.send("Cloudflare.getHandoffState", { targetId: session.target_id });
-      if (!handoff.active) throw Error("Practice handoff is no longer active");
-      const live = await cdp.send("Cloudflare.getLiveView", { targetId: session.target_id, mode: "tab", expiresInMs });
-      return live.devtoolsFrontendUrl;
-    } finally { await cdp.detach(); }
+      const browser = await this.browser(session.session_id);
+      stage = "locate_target";
+      const page = browser.contexts().flatMap(context => context.pages()).find(page => page.url() === "about:blank");
+      if (!page) throw Error("Practice target missing");
+      const cdp = await page.context().newCDPSession(page);
+      try {
+        stage = "verify_target";
+        const { targetInfo } = await cdp.send("Target.getTargetInfo");
+        if (targetInfo.targetId !== session.target_id) throw Error("Practice target changed");
+        stage = "verify_handoff";
+        const handoff = await cdp.send("Cloudflare.getHandoffState", { targetId: session.target_id });
+        if (!handoff.active) throw Error("Practice handoff is no longer active");
+        stage = "mint_capability";
+        const live = await cdp.send("Cloudflare.getLiveView", { targetId: session.target_id, mode: "tab", expiresInMs });
+        return live.devtoolsFrontendUrl;
+      } finally { await cdp.detach(); }
+    } catch { throw new HttpError(503, `practice_view_${stage}_unavailable`); } // Fixed stage only; SDK errors may contain URLs.
   }
   async close(session: TakeoverSession): Promise<void> {
     try {

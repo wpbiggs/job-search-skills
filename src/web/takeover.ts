@@ -29,7 +29,7 @@ export async function mountTakeover(container: Element, api: Api, busy: Busy) {
         const explanation = document.createElement("p"); explanation.textContent = "Private bearer link: do not share, save, screenshot or send it to an assistant. Open now; new connections expire quickly. Ending practice or server expiry closes the browser, including connected viewers.";
         const link = document.createElement("a"); link.href = result.live_view_url; link.target = "_blank"; link.rel = "noopener noreferrer"; link.referrerPolicy = "no-referrer"; link.textContent = "Open fictional practice browser";
         links.append(explanation, link);
-        expiry = setTimeout(discardLink, Math.max(0, Math.min(30000, Date.parse(result.takeover.expires_at) - Date.now())));
+        expiry = setTimeout(discardLink, Math.max(0, Math.min(60000, Date.parse(result.takeover.expires_at) - Date.now())));
       }));
     }
     for (const [action, label] of [["cancel", "Cancel practice and close browser"], ["complete", "End practice — do not resume automation"]]) {

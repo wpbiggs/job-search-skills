@@ -87,7 +87,7 @@ export default {
       }, env.FIXTURE_ORIGIN);
       return Response.json(result);
     } catch (error) {
-      if (operation === "takeover") return Response.json({ status: "needs_user", reason: "Takeover unavailable, changed or closing. Check its status; do not retry a start automatically.", execution_enabled: false }, { status: error instanceof HttpError ? error.status : 503 });
+      if (operation === "takeover") return Response.json({ status: "needs_user", reason: "Takeover unavailable, changed or closing. Check its status; do not retry a start automatically.", diagnostic: error instanceof HttpError ? error.message : "private_transport_failure", execution_enabled: false }, { status: error instanceof HttpError ? error.status : 503 });
       return Response.json(operation === "run" || operation === "fixture"
         ? { status: "uncertain", reason: "Browser service interrupted. Check the attempt; do not retry automatically." }
         : { status: "needs_user", reason: "Read-only inspection interrupted or destination unsupported. No applicant data was entered; no automatic retry." }, { status: 503 });

@@ -24,6 +24,9 @@ export interface TakeoverDependencies {
   release(id: string): Promise<void>;
 }
 const duration = 120000;
+// Browser Run enforces a 60-second minimum even though its installed CDP types
+// only declare this parameter as number. Never extend the original deadline to meet it.
+export const TAKEOVER_LINK_TTL = 60000;
 export function validLiveView(value: string): boolean {
   try {
     const url = new URL(value);
@@ -115,14 +118,15 @@ export class TakeoverController {
     this.owned(owner, id);
     const report = await this.status(owner), state = this.owned(owner, id);
     if (!report || !state?.session || state.phase !== "paused") throw new HttpError(409, "No current paused takeover.");
-    const url = await this.deps.driver.view(state.session, Math.min(30000, state.expires_at - this.deps.now()));
+    if (state.expires_at - this.deps.now() < TAKEOVER_LINK_TTL) throw new HttpError(409, "Too little authorized time remains to issue a provider control link. End this session; do not extend it automatically.");
+    const url = await this.deps.driver.view(state.session, TAKEOVER_LINK_TTL);
     const current = this.owned(owner, id);
-    if (!validLiveView(url) || !current || current.phase !== "paused" || this.deps.now() >= current.expires_at || !await this.deps.allowed(owner)) {
+    if (!validLiveView(url) || !current || current.phase !== "paused" || this.deps.now() + TAKEOVER_LINK_TTL > current.expires_at || !await this.deps.allowed(owner)) {
       if (current) await this.close({ ...current, reason: "revoked" });
       throw new HttpError(409, "Takeover changed. No control link released.");
     }
     const final = this.owned(owner, id);
-    if (!final || final.phase !== "paused" || this.deps.now() >= final.expires_at) throw new HttpError(409, "Takeover changed. No control link released.");
+    if (!final || final.phase !== "paused" || this.deps.now() + TAKEOVER_LINK_TTL > final.expires_at) throw new HttpError(409, "Takeover changed. No control link released.");
     // Never persist or include this bearer URL in status, audit events, exports or MCP.
     return { takeover: summary(final), live_view_url: url };
   }

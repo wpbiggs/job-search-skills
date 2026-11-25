@@ -70,6 +70,16 @@ An additive migration does not require rewriting existing preparation records. R
 - GitHub-hosted CI is blocked, not passed: check-run `130262124897` reports that the account is locked due to a billing issue. Local and deployed checks do not replace a hosted-CI result.
 - [Draft PR #3](https://github.com/wpbiggs/job-search-skills/pull/3) remains draft and [issue #2](https://github.com/wpbiggs/job-search-skills/issues/2) remains open. Real pilot outcome: **0/5 employer applications, zero employer receipts, zero employer messages and zero interviews claimed.**
 
+## Candidate-operated workflow release (2026-11-25 UTC)
+
+- Commit `4b7a5f6` adds an Applications queue and exact saved-version plain-text downloads to the existing candidate-operated handoffs. No schema or authorization changes; no live employer adapter enabled.
+- Deployed workspace version: `ae19ef13-6b5d-4760-9aae-8b52c4276d2f`. The private executor version is unchanged. The deployed JavaScript matches the local build (SHA-256 `12a86a9d4ac347d66dc5dbf88696e57709b22d20d4ca95dcf07acf46e422e05e`).
+- Typechecks, 58 Node tests, 17 Python tests, workspace dry-run and the integrated local workerd/browser suite passed. The browser flow checks queue-to-job navigation, downloaded snapshot bytes, the existing candidate receipt flow and the submitted queue state.
+- All 20 deployed browser/OAuth/MCP regression groups passed at `2026-11-25T17:18:53.346Z`, including the queue and download assertions. Post-run read-only metadata checks found zero fictional fixture accounts, executor intents/attempts and browser leases. Candidate record bodies were not queried or modified for cleanup.
+- The focused actual Cloudflare-browser test passed again at `2026-11-25T17:16:19.825Z` with a synthetic-only receipt; its fictional account was deleted. It does not establish a live employer integration.
+- Public routing/auth smoke passed. Fresh GitHub check-run `139377764119` still reports an account billing lock; hosted CI is not passed.
+- Candidate-operated applications can proceed after individual review. Delegated employer execution and the real five-application pilot remain unfinished; no actual employer application or interview is claimed from this release.
+
 ## Remaining gates before a real five-application pilot
 
 1. Deliberately review/revise the current final-action project contract, without allowing an assistant to approve its own payloads or attest to legal/sensitive matters.

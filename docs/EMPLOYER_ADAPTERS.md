@@ -93,6 +93,28 @@ This mode consumes three public metadata slots. `test/application-package.test.t
 
 ## Unfinished execution work
 
+### Rendered inspection (inspection only)
+
+`src/employer-rendered.ts` and `src/employer-rendered-browser.ts` add an owner-scoped website operation, `POST executor/render` with an owned `job_id`. It passes no applicant answers or documents to the private browser service. It reserves two units atomically from the existing ten-unit daily combined budget, fetches fresh public metadata, then opens a fresh JavaScript-enabled context. Recording, service workers, downloads and permissions are disabled. The existing two-browser lease and 45-second browser deadline remain in force.
+
+Only the exact initial hosted document and query-free hashed Greenhouse CDN `/assets/` scripts/styles may load (at most 100 requests). Writes, subsequent navigation, redirects, unknown GETs, popups and sockets are denied. Guardrails restrict the browser to the exact job host and Greenhouse asset host. Asset paths are recorded, not claimed to be cryptographic content hashes. There is no employer filling, upload, final click or retained Live View URL.
+
+DOM extraction runs through CDP `Page.createIsolatedWorld` and `Runtime.callFunctionOn`, with universal access disabled and literal JavaScript to avoid transpiler callback helpers. It validates the resulting bounded structure server-side. Input/textarea/contenteditable values and selected options are not read; public page text hashing first removes editable content, scripts and styles. Select option definitions are structural metadata, not selected answers. Two consecutive structural snapshots detect observed changes but cannot guarantee future page stability.
+
+Review binds metadata fingerprint, control IDs/names/types/labels/requiredness/options/constraints, role headings, legal-notice hints, sanitized public-text digest, asset paths and viewport to a rendered fingerprint. Missing, extra, anonymous, reused or changed controls are interventions, as are JavaScript-managed default-GET forms, authentication, challenges, legal text and incomplete restricted rendering. A question-structure match is not overall form readiness, execution authority, legal clearance or receipt evidence. Legal keyword detection is conservative and not an exhaustive legal classifier.
+
+`npm run test:rendered` runs real Chromium against intercepted fictional pages. It verifies isolated-world resistance to page global/prototype overrides, rejected writes/unknown GETs/sockets/popups, no form-value collection, value-independent structural/text fingerprints and legal notices outside the form. Fourteen unit tests cover mismatch rejection, binding changes, bounded schemas, owner/pause boundaries and two-unit budget reservation. The ordinary-package approval scope is unchanged. Secure persistent takeover, execution-grant binding and employer receipt capture remain unimplemented.
+
+Optional scoped deployed check (one metadata preflight plus a two-unit rendered inspection; no applicant profile or documents):
+
+```sh
+WORKSPACE_ORIGIN=https://william.biggers.family \
+GREENHOUSE_JOB_URL='<exact public hosted requisition URL>' \
+CHECK_RENDERED_FIXTURE=1 npm run check:greenhouse:deployed
+```
+
+Run separately from `CHECK_PACKAGE_FIXTURE=1`; do not widen the daily budget to run both. The temporary owned workspace is erased on completion or failure. Cloudflare guardrail and recording behavior follows the installed `@cloudflare/playwright` 1.4.0 types and [guardrail documentation](https://developers.cloudflare.com/browser-run/features/guardrails/).
+
 1. Bind the implemented ordinary package to a verified rendered-form revision and a separately permitted execution grant. Current approval binds job, profile, documents and public question metadata; it does not waive pending takeover, rendered-form or final-action policy gates.
 2. A rendered Greenhouse browser adapter with bounded egress, exact approved upload bytes, question/control parity and a tested candidate takeover path. Do not execute with unreviewed JavaScript/network destinations simply because the public API looked ordinary.
 3. Secure interactive takeover for authentication, challenges and candidate-only legal/sensitive decisions; changed forms/destinations invalidate authority. Never automate attestations or bypass challenges.

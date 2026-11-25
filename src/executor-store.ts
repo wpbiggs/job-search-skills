@@ -31,6 +31,13 @@ export class ExecutorStore {
     return this.call({ operation: "inspect", destination: employerUrl(String(job.data.source_url), this.allowedHosts) });
   }
   async fixtureCheck() { this.candidate(); if (await this.paused()) throw new HttpError(409, "Executor paused for this account."); return this.call({ operation: "fixture" }); }
+  async render(jobId: string) {
+    this.candidate();
+    if (await this.paused()) throw new HttpError(409, "Executor paused for this account.");
+    const job = await this.store.get(z.string().uuid().parse(jobId));
+    if (job.kind !== "job") throw new HttpError(400, "Select an owned job.");
+    return this.call({ operation: "render", destination: employerUrl(String(job.data.source_url), this.allowedHosts) });
+  }
   async list(): Promise<ExecutorRow[]> {
     const now = new Date().toISOString();
     await this.store.db.prepare("UPDATE delegated_intents SET status='expired',reason='Opening approval expired.',updated_at=? WHERE user_id=? AND status='approved' AND expires_at<=?").bind(now, this.store.userId, now).run();

@@ -108,6 +108,10 @@ async function api(request: Request, env: Env, path: string, server: OAuthAuthor
     const body = z.object({ job_id: z.string().uuid() }).strict().parse(await jsonBody(request, 1000));
     return Response.json(await executor.inspect(body.job_id));
   }
+  if (path === "executor/render" && request.method === "POST") {
+    const body = z.object({ job_id: z.string().uuid() }).strict().parse(await jsonBody(request, 1000));
+    return Response.json(await executor.render(body.job_id));
+  }
   if (path === "executor/fixture-check" && request.method === "POST") {
     z.object({ confirmation: z.literal("FICTIONAL INFRASTRUCTURE TEST ONLY") }).strict().parse(await jsonBody(request, 1000));
     return Response.json(await executor.fixtureCheck());

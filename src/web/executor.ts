@@ -1,7 +1,8 @@
 import { escapeHtml as esc } from "../security.ts";
 import type { ExecutorRow } from "../executor-store.ts";
 import type { GreenhouseResult } from "../employer-greenhouse.ts";
-import { greenhouseReview } from "./employer-review.ts";
+import { greenhouseReview, renderedReview } from "./employer-review.ts";
+import type { RenderedInspection } from "../employer-rendered.ts";
 import { mountPackageReview, mountPackageHistory } from "./package-review.ts";
 import type { PackageSummary } from "../application-package-store.ts";
 import type { RecordRow } from "../store.ts";
@@ -23,6 +24,16 @@ export async function mountExecutor(section: Element, jobId: string, drafts: Rec
     if (!box.isConnected) return;
     if ("inspection" in result) {
       review.innerHTML = greenhouseReview(result.inspection);
+      const rendered = document.createElement("section");
+      const verify = document.createElement("button"); verify.className = "secondary"; verify.textContent = "Verify rendered controls (no applicant data)";
+      review.append(verify, rendered);
+      verify.addEventListener("click", () => void busy(async () => {
+        rendered.replaceChildren();
+        const response = await api<{ rendered?: RenderedInspection; reason?: string }>("executor/render", "POST", { job_id: jobId });
+        if (!box.isConnected) return;
+        if (response.rendered) rendered.innerHTML = renderedReview(response.rendered);
+        else rendered.textContent = response.reason ?? "Rendered verification stopped. No applicant data was entered.";
+      }));
       mountPackageReview(review, jobId, result.inspection, drafts, api, busy, refresh);
       output.textContent = "Official public metadata inspected. No applicant data entered; execution remains disabled.";
     } else output.textContent = JSON.stringify(result, null, 2);

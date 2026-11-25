@@ -15,6 +15,7 @@
     "test:worker": "node scripts/test-worker.mjs",
     "test:executor": "node --import tsx scripts/test-executor-browser.mjs",
     "test:packages": "node --import tsx scripts/test-package-ui.mjs",
+    "test:rendered": "node --import tsx scripts/test-rendered-browser.mjs",
     "check:executor:deployed": "node scripts/check-executor-deployed.mjs",
     "check:greenhouse:deployed": "node --import tsx scripts/check-greenhouse-deployed.mjs",
     "build": "wrangler deploy --dry-run",

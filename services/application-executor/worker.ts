@@ -3,16 +3,14 @@ import { z } from "zod";
 import { employerUrl, formSchema, payloadSchema, EXECUTOR_FIXTURE_DOCUMENT } from "../../src/executor-contract.ts";
 import { inspectBrowser, runBrowser } from "../../src/executor-browser.ts";
 import { hash, jsonBody } from "../../src/security.ts";
-import { greenhouseTarget, inspectGreenhouse } from "../../src/employer-greenhouse.ts";
-
-async function claimInspectionBudget(db: D1Database): Promise<boolean> {
-  const quota = await db.prepare("INSERT INTO executor_budget(day,used) VALUES(?,1) ON CONFLICT(day) DO UPDATE SET used=used+1 WHERE used<10 RETURNING used").bind(new Date().toISOString().slice(0, 10)).first();
-  await db.prepare("DELETE FROM executor_budget WHERE day<?").bind(new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)).run();
-  return Boolean(quota);
-}
+import { greenhouseTarget, inspectGreenhouse, type GreenhouseInspection } from "../../src/employer-greenhouse.ts";
+import { inspectGreenhouseRendered } from "../../src/employer-rendered-browser.ts";
+import { GREENHOUSE_ASSET_HOST } from "../../src/employer-rendered.ts";
+import { claimInspectionBudget } from "../../src/executor-budget.ts";
 
 const command = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("inspect"), destination: z.string().max(2048) }).strict(),
+  z.object({ operation: z.literal("render"), destination: z.string().max(2048) }).strict(),
   z.object({ operation: z.literal("fixture") }).strict(),
   z.object({ operation: z.literal("run"), id: z.string().uuid(), user_id: z.string().uuid(), nonce: z.string().regex(/^[a-f0-9]{64}$/) }).strict(),
 ]);
@@ -26,7 +24,7 @@ export default {
     let leaseId: string | undefined;
     let deadline: ReturnType<typeof setTimeout> | undefined;
     let deadlineClose: Promise<void> | undefined;
-    let operation: "inspect" | "fixture" | "run" | undefined;
+    let operation: "inspect" | "render" | "fixture" | "run" | undefined;
     try {
       const input = command.parse(await jsonBody(request, 2000));
       operation = input.operation;
@@ -37,10 +35,18 @@ export default {
         if (!row) return Response.json({ status: "needs_user", reason: "No current one-use claim." });
         if (new URL(row.destination).origin !== env.FIXTURE_ORIGIN) return Response.json({ status: "needs_user", reason: "Live final submission is disabled by the candidate-control contract and pending employer-adapter validation." });
       }
-      const destination = employerUrl(input.operation === "fixture" ? `${env.FIXTURE_ORIGIN}/job-search/workspace/executor-fixture` : input.operation === "inspect" ? input.destination : row!.destination, hosts);
+      const destination = employerUrl(input.operation === "fixture" ? `${env.FIXTURE_ORIGIN}/job-search/workspace/executor-fixture` : input.operation === "inspect" || input.operation === "render" ? input.destination : row!.destination, hosts);
       if (input.operation === "inspect" && greenhouseTarget(destination)) {
         if (!await claimInspectionBudget(env.DB)) return Response.json({ status: "needs_user", reason: "Daily inspection/browser budget reached; no automatic retry." }, { status: 429 });
         return Response.json(await inspectGreenhouse(destination));
+      }
+      let metadata: GreenhouseInspection | undefined;
+      if (input.operation === "render") {
+        if (!greenhouseTarget(destination)) return Response.json({ status: "needs_user", reason: "Rendered verification currently supports exact hosted Greenhouse requisitions only.", applicant_data_entered: false, live_submission_enabled: false });
+        if (!await claimInspectionBudget(env.DB, 2)) return Response.json({ status: "needs_user", reason: "Rendered inspection needs two remaining metadata/browser budget units; no automatic retry." }, { status: 429 });
+        const inspected = await inspectGreenhouse(destination);
+        if (!("inspection" in inspected)) return Response.json(inspected);
+        metadata = inspected.inspection;
       }
       const now = new Date().toISOString();
       await env.DB.prepare("DELETE FROM executor_browser_leases WHERE expires_at<=?").bind(now).run();
@@ -48,11 +54,15 @@ export default {
       const acquired = await env.DB.prepare("INSERT INTO executor_browser_leases(id,expires_at) SELECT ?,? WHERE (SELECT count(*) FROM executor_browser_leases)<2 RETURNING id").bind(lease, new Date(Date.now() + 120000).toISOString()).first();
       if (!acquired) return Response.json({ status: "needs_user", reason: "Two isolated browser sessions are already running; no automatic retry." }, { status: 429 });
       leaseId = lease;
-      if (!await claimInspectionBudget(env.DB)) return Response.json({ status: "needs_user", reason: "Global inspection/browser budget reached (10/day); no automatic retries." }, { status: 429 });
-      browser = await launch(env.BROWSER, { guardrails: { allowedDomains: [new URL(destination).hostname] }, keep_alive: 60000 });
+      if (input.operation !== "render" && !await claimInspectionBudget(env.DB)) return Response.json({ status: "needs_user", reason: "Global inspection/browser budget reached (10/day); no automatic retries." }, { status: 429 });
+      browser = await launch(env.BROWSER, { guardrails: { allowedDomains: [new URL(destination).hostname, ...(metadata ? [GREENHOUSE_ASSET_HOST] : [])] }, keep_alive: 60000, recording: false });
       deadline = setTimeout(() => { deadlineClose = browser!.close().catch(() => {}); }, 45000);
-      const context = await browser.newContext({ javaScriptEnabled: false, serviceWorkers: "block", acceptDownloads: false });
+      const context = await browser.newContext({ javaScriptEnabled: input.operation === "render", serviceWorkers: "block", acceptDownloads: false, viewport: { width: 1280, height: 900 }, permissions: [] });
       context.setDefaultTimeout(10000);
+      if (input.operation === "render") {
+        if (!metadata) throw new Error("Missing inspected metadata");
+        return Response.json({ rendered: await inspectGreenhouseRendered(context, metadata), live_submission_enabled: false });
+      }
       if (input.operation === "inspect") {
         try { return Response.json({ form: await inspectBrowser(context, destination), live_submission_enabled: false }); }
         catch { return Response.json({ status: "needs_user", reason: "This opening has an authentication, challenge, redirect, sensitive question, unsupported form or untested ATS adapter. No applicant data was entered." }); }

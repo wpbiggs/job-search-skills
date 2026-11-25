@@ -7,6 +7,8 @@ import { acceptsOrdinaryAnswer } from "../src/application-package.ts";
 const origin = process.env.WORKSPACE_ORIGIN;
 const destination = process.env.GREENHOUSE_JOB_URL;
 const checkPackage = process.env.CHECK_PACKAGE_FIXTURE === "1";
+const checkRendered = process.env.CHECK_RENDERED_FIXTURE === "1";
+if (checkPackage && checkRendered) throw Error("Run package and rendered fixture checks separately to preserve the bounded daily budget.");
 if (origin !== "https://william.biggers.family" || !destination || !greenhouseTarget(destination)) throw Error("Explicit deployment origin and hosted GREENHOUSE_JOB_URL required. This performs one public metadata read, never an application.");
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -46,6 +48,20 @@ try {
   assert.equal(result.inspection.applicant_data_entered, false);
   assert.match(result.inspection.fingerprint, /^[a-f0-9]{64}$/);
   await page.getByRole("heading", { name: "Greenhouse job-specific preflight", exact: true }).waitFor();
+  let renderedEvidence;
+  if (checkRendered) {
+    const pendingRender = page.waitForResponse(response => response.url().endsWith("/job-search/api/executor/render"), { timeout: 60000 });
+    await page.getByRole("button", { name: "Verify rendered controls (no applicant data)", exact: true }).click();
+    const renderedResponse = await pendingRender, renderedResult = await renderedResponse.json();
+    assert.equal(renderedResponse.status(), 200, JSON.stringify(renderedResult));
+    assert.ok(renderedResult.rendered, JSON.stringify(renderedResult));
+    const report = renderedResult.rendered;
+    assert.equal(report.execution_enabled, false); assert.equal(report.values_collected, false); assert.equal(report.applicant_data_entered, false); assert.equal(report.interactive_takeover_available, false);
+    assert.equal(report.destination, destination); assert.match(report.form_fingerprint, /^[a-f0-9]{64}$/);
+    assert.ok(report.form.controls.length > 0);
+    await page.getByRole("heading", { name: "Rendered Greenhouse control review", exact: true }).waitFor();
+    renderedEvidence = { fingerprint: report.form_fingerprint, controlCount: report.form.controls.length, questionStructureMatches: report.questions_match_metadata, interventions: report.interventions, observation: report.observation, assetCount: report.observed_assets.length, valuesCollected: false, executionEnabled: false };
+  }
   let packageDigest;
   if (checkPackage) {
     const contact = { first_name: "Fictional", last_name: "Candidate", email: "fixture@example.invalid", phone: "+1 202 555 0100" };
@@ -87,7 +103,7 @@ try {
   const removed = await api("delete", { confirmation: "DELETE MY WORKSPACE" });
   assert.equal(removed.status(), 200); deleted = true;
   assert.equal((await context.request.get(`${origin}/job-search/api/state`)).status(), 401);
-  const evidence = { origin, checkedAt: new Date().toISOString(), fictionalWorkspaceOnly: true, publicDestination: destination, questionCount: result.inspection.questions.length, interventionCount: result.inspection.interventions.length, fingerprint: result.inspection.fingerprint, employerDataEntered: false, actualEmployerSubmissions: 0, fixtureAccountDeleted: deleted, fictionalPackageApprovalVerified: checkPackage, packageDigest };
+  const evidence = { origin, checkedAt: new Date().toISOString(), fictionalWorkspaceOnly: true, publicDestination: destination, questionCount: result.inspection.questions.length, interventionCount: result.inspection.interventions.length, fingerprint: result.inspection.fingerprint, employerDataEntered: false, actualEmployerSubmissions: 0, fixtureAccountDeleted: deleted, fictionalPackageApprovalVerified: checkPackage, packageDigest, renderedEvidence };
   await mkdir("test-results", { recursive: true }); await writeFile("test-results/greenhouse-deployed.json", JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify(evidence, null, 2));
 } finally {

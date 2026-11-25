@@ -81,6 +81,16 @@ This mode consumes three public metadata slots. `test/application-package.test.t
 - Public metadata inspection is now implemented. Exact-payload approval, rendered employer execution, interactive takeover, provider receipt verification and the real application pilot are not completed by this milestone.
 - GitHub check-run `139391310126` reports an account billing lock; hosted CI is blocked, not passed.
 
+## Verified exact-package milestone (2026-11-25 UTC)
+
+- Runtime commit `5d7badd`; production migration `0006_application_packages.sql` applied after recording a D1 Time Travel bookmark. Workspace version: `412828ad-8a4b-4bb2-9d97-8c4ab43fc24f`. Private preflight service remains unchanged.
+- Typechecks, 98 Node tests (24 package-specific), 17 Python tests, both Worker dry-runs, four real Chromium package-review scenarios and the isolated workerd integration suite passed. A supplemental assertion confirms that a package ID cannot authorize the existing browser executor.
+- All 20 deployed browser/OAuth/MCP regression groups passed at `2026-11-25T18:09:32.888Z`, including package endpoint token/CSRF boundaries. The deployed JavaScript matches the local build (SHA-256 `762dad0118f478ee03f24b1828e519247221642a343c7ce67cf43004015adb1d`).
+- The optional deployed package fixture passed at `2026-11-25T20:02:04.323Z`: real private-service public metadata, exact fictional contact/document preview, explicit website confirmation, persistent D1 package, execution-pending queue state and synchronous profile-change invalidation. Fictional account deletion succeeded. No employer data entry, application intent, submission or receipt occurred.
+- Post-run read-only metadata checks found zero fictional fixture accounts, exact packages, package-document links, browser intents/attempts and active leases. No actual candidate record bodies were queried for cleanup. Portfolio/workspace/assets returned HTTP 200; unauthenticated packages/state/executor/MCP returned HTTP 401.
+- GitHub check-run `139408178289` still reports an account billing lock. Local/deployed verification is separate evidence, not a hosted-CI pass.
+- This proves the ordinary package storage/review binding, **not the complete goal**: suitable-role discovery, real tailored candidate materials, rendered-form execution grants, a production employer runner, secure candidate takeover and real employer receipt/response verification still need end-to-end evidence. No real pilot outcome is claimed.
+
 ## Unfinished execution work
 
 1. Bind the implemented ordinary package to a verified rendered-form revision and a separately permitted execution grant. Current approval binds job, profile, documents and public question metadata; it does not waive pending takeover, rendered-form or final-action policy gates.

@@ -7,6 +7,7 @@ import { ApplicationPackageStore } from "../src/application-package-store.ts";
 import { packageInputSchema } from "../src/application-package.ts";
 import { hash } from "../src/security.ts";
 import { SubmissionStore } from "../src/submissions.ts";
+import { ExecutorStore } from "../src/executor-store.ts";
 
 async function fixture() {
   const db = new LocalDatabase(":memory:"), userId = crypto.randomUUID(), otherId = crypto.randomUUID();
@@ -52,6 +53,8 @@ test("exact package binds employer, ordinary answers, chosen document bytes, exp
     const saved = await f.packages.get(approved.id);
     assert.deepEqual(saved.package, exact);
     assert.equal(saved.status, "approved");
+    const executor = new ExecutorStore(f.store, { async fetch() { throw new Error("Package must never authorize a browser invocation"); } }, ["job-boards.greenhouse.io"], "https://example.com");
+    await assert.rejects(executor.run(approved.id), /Unapproved/);
     assert.equal((await f.db.prepare("SELECT count(*) AS n FROM delegated_attempts").first<{ n: number }>())?.n, 0);
     assert.deepEqual(await f.store.reviews(), []); assert.deepEqual(await f.store.handoffs(), []);
   } finally { f.db.close(); }

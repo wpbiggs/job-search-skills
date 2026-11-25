@@ -101,7 +101,7 @@ export async function inspectGreenhouse(destination: string, fetcher: typeof fet
         for (const field of question.fields) {
           if (names.has(field.name)) return stopped("ambiguous_fields", "Duplicate provider fields require review.");
           names.add(field.name);
-          if (field.values && new Set(field.values.map(option => JSON.stringify(option.value))).size !== field.values.length) return stopped("ambiguous_fields", "Duplicate provider option values require review.");
+          if (field.values && new Set(field.values.map(option => String(option.value))).size !== field.values.length) return stopped("ambiguous_fields", "Duplicate provider option values require review.");
         }
         questions.push({ id: `${section}:${index}`, section, label: question.label, description: question.description ?? null, required: question.required,
           alternatives: question.fields.map(field => ({ name: field.name, type: field.type, options: field.values ?? [] })), ...handling(question, section) });

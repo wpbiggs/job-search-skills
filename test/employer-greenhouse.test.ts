@@ -111,6 +111,9 @@ test("duplicate provider options and demographic identities stop rather than bec
   const duplicate = { ...input, questions: [{ ...question("Custom question", "question_777"), fields: [{ name: "question_777", type: "multi_value_single_select", values: [option, option] }] }] };
   const result = await inspectGreenhouse(destination, fetcher(duplicate).fetch, now);
   assert.ok("code" in result); assert.equal(result.code, "ambiguous_fields");
+  const mixedTypes = { ...input, questions: [{ ...question("Custom question", "question_777"), fields: [{ name: "question_777", type: "multi_value_single_select", values: [option, { value: "1", label: "Different label, same form value" }] }] }] };
+  const mixedResult = await inspectGreenhouse(destination, fetcher(mixedTypes).fetch, now);
+  assert.ok("code" in mixedResult); assert.equal(mixedResult.code, "ambiguous_fields");
   const demographic = { id: 1, label: "Optional", type: "multi_value_single_select", required: false, answer_options: [] };
   const demographics = await inspectGreenhouse(destination, fetcher({ ...input, demographic_questions: { header: "Optional", description: "", questions: [demographic, demographic] } }).fetch, now);
   assert.ok("code" in demographics); assert.equal(demographics.code, "ambiguous_fields");

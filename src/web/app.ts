@@ -4,8 +4,11 @@ import { escapeHtml as esc } from "../security.ts";
 import type { RecordRow, WorkspaceStore } from "../store.ts";
 import { mountHandoffs } from "./handoffs.ts";
 import type { Handoff } from "../submissions.ts";
+import { mountExecutor } from "./executor.ts";
+import { applicationsView } from "./applications.ts";
+import type { PackageSummary } from "../application-package-store.ts";
 
-type State = { user: { name: string; created_at: string }; usage: Awaited<ReturnType<WorkspaceStore["usage"]>>; records: RecordRow[]; handoffs: Handoff[]; reviews: { job_id: string; action: string; draft_id: string; draft_revision: number; destination: string; confirmation: string; current: boolean; updated_at: string }[]; outcomes: { job_id: string; status: string; note: string; next_action_at: string | null; updated_at: string }[]; connections: { id: string; clientId: string; scope: string[]; current: boolean }[] };
+type State = { user: { name: string; created_at: string }; usage: Awaited<ReturnType<WorkspaceStore["usage"]>>; records: RecordRow[]; handoffs: Handoff[]; application_packages: PackageSummary[]; reviews: { job_id: string; action: string; draft_id: string; draft_revision: number; destination: string; confirmation: string; current: boolean; updated_at: string }[]; outcomes: { job_id: string; status: string; note: string; next_action_at: string | null; updated_at: string }[]; connections: { id: string; clientId: string; scope: string[]; current: boolean }[] };
 type Evidence = { id: string; claim: string; source: string; confirmed: boolean };
 type Profile = { goals: string; preferences: string; constraints: string; evidence: Evidence[] };
 const root = document.querySelector<HTMLDivElement>("#app")!;
@@ -64,12 +67,18 @@ function recoveryBanner(): string {
 }
 function render() {
   if (!state) return signInView();
-  const labels: Record<string, string> = { overview: "Overview", profile: "My profile", jobs: "Jobs & drafts", connect: "Connect my AI", privacy: "Activity & privacy" };
+  const labels: Record<string, string> = { overview: "Overview", applications: "Applications", profile: "My profile", jobs: "Jobs & drafts", connect: "Connect my AI", privacy: "Activity & privacy" };
   root.innerHTML = `<div class="toolbar"><div><p class="eyebrow">Your private workspace</p><h1>${esc(state.user.name)}</h1></div><div class="actions"><button id="refresh" class="secondary">Refresh records</button><button id="logout" class="secondary">Sign out</button></div></div>${recoveryBanner()}<nav class="tabs" aria-label="Workspace sections">${Object.entries(labels).map(([key, label]) => `<button data-tab="${key}" ${tab === key ? 'aria-current="page"' : ""}>${label}</button>`).join("")}</nav><div id="section">${tab === "overview" ? overviewView() : tab === "profile" ? profileView() : tab === "jobs" ? jobsView() : tab === "connect" ? connectView() : privacyView()}</div>`;
   document.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach(button => button.onclick = () => { tab = button.dataset.tab!; void busy(refresh); });
   document.querySelector<HTMLButtonElement>("#refresh")!.onclick = () => void busy(refresh);
   document.querySelector<HTMLButtonElement>("#logout")!.onclick = () => void busy(async () => { await api("auth/logout", "POST", {}); state = null; recoveryCode = ""; signInView(); });
   document.querySelector<HTMLButtonElement>("#saved-recovery")?.addEventListener("click", () => { recoveryCode = ""; void refresh(); });
+  if (tab === "applications") document.querySelector("#section")!.innerHTML = applicationsView(state);
+  if (tab === "overview") {
+    const next = document.createElement("section"); next.className = "box";
+    next.innerHTML = '<h2>Turn preparation into an application</h2><p>Review your saved materials, open the employer form yourself and record its confirmation. A daily search report does not submit applications.</p><button data-go="applications">Start an application</button>';
+    document.querySelector("#section")!.prepend(next);
+  }
   wireSection();
 }
 function overviewView(): string {
@@ -111,10 +120,19 @@ function privacyPolicyView(): string {
   return `<section class="box"><h2>Private, not invisible to the host</h2><p>Profile, job, draft, review, and activity records are stored in a dedicated Cloudflare D1 database. Passkey public keys and hashed recovery/session credentials are stored for authentication; OAuth client grants live in a separate namespace. We do not store your passkey private key or biometric data.</p><p>This is not end-to-end encrypted storage: hosting administrators can access records. Connected assistants can read only the scopes you approve, but their providers have separate processing and retention policies. No inference runs here, and no employer receives anything from this service.</p><p>Keep secrets, government IDs, financial information, and confidential employer documents out. Limits: 250 records, 64 KiB per record, 2 MiB total. Up to 200 minimal activity events are retained; they do not contain draft bodies.</p><div class="actions"><a class="button" href="/job-search/api/export" download="job-search-workspace.json">Export my workspace</a><button id="add-passkey" class="secondary">Add another passkey</button></div><p class="muted">An export contains personal data. Save it privately. It excludes authentication credentials and tokens. Passkeys are specific to this site; a self-hosted deployment needs its own passkeys.</p></section><section class="box"><h2>Delete a record</h2><p>You can delete a job and its related records, or an individual draft or interview note, under Jobs &amp; drafts. Export first if you want to keep a copy.</p></section><section class="box"><h2>Activity you can inspect</h2><div id="activity"><p class="muted">Loading activity…</p></div></section><section class="box"><h2>Delete my workspace</h2><p>Deletes the active profile, jobs, drafts, reviews, activity, passkeys, recovery code, and sessions. Assistant access is revoked. This cannot erase exports or copies held by your assistant; hosting backups may persist for their retention period.</p><button id="delete-workspace" class="danger">Delete my entire workspace</button><p><a href="https://github.com/wpbiggs/job-search-skills/blob/main/docs/HOSTED_WORKSPACE.md">Full storage, retention, and self-hosting details ↗</a></p></section>`;
 }
 function wireSection() {
+  document.querySelectorAll<HTMLButtonElement>("[data-application-job]").forEach(button => button.onclick = () => {
+    selectedJob = button.dataset.applicationJob!; tab = "jobs"; render();
+  });
   if (tab === "privacy") {
     const section = document.createElement("section"); section.className = "box";
     section.innerHTML = "<h2>Application handoff history</h2><p>Up to 250 handoffs per account store record identities/revisions, destination, content digest, status, timestamps and an optional candidate-reported receipt (500 characters). This separate metadata is not counted in preparation byte usage. It is included in your export and can be read by assistants you authorize. Do not put secrets in receipt notes.</p><p>Delete the linked job/draft or your workspace to erase handoff history. Removing a profile invalidates pending handoffs but does not erase their metadata. Handoffs never submit, upload or withdraw an employer application.</p>";
     document.querySelector("#section")!.prepend(section);
+    const executorPrivacy = document.createElement("section"); executorPrivacy.className = "box";
+    executorPrivacy.innerHTML = "<h2>Browser executor privacy and limits</h2><p>The separately deployed browser service uses fresh isolated sessions with no imported credentials. Explicit inspections contact the allowlisted employer website without candidate fields. No live employer submission adapter is enabled. Fictional ATS tests cannot count as real applications.</p><p>Executor authorizations can store exact field/document payloads in the same non-end-to-end-encrypted database (50 intents and 1 MiB of payloads/account, separate from preparation byte usage), plus form snapshots, hashes, status and at most one attempt/receipt each. These are included in private exports but never restored by preparation import. Delete the linked job/draft or workspace to erase them; profile removal invalidates pending authority. Never store secrets or sensitive screening answers. Browser budget metadata contains only day/count and is retained at most 90 days.</p>";
+    document.querySelector("#section")!.prepend(executorPrivacy);
+    const packagePrivacy = document.createElement("section"); packagePrivacy.className = "box";
+    packagePrivacy.innerHTML = '<h2>Exact application-package privacy</h2><p>Only your website session can approve an exact ordinary-data/document package. Approval stores the exact contact/link values, saved document bytes, chosen provider fields, explicit skips, deferred question labels, hashes, record revisions and expiry in the same non-end-to-end-encrypted database. No sensitive screening answers or legal consent are accepted by this package workflow. Do not put secrets or identity documents in materials.</p><p>Limits: 50 packages and 1 MiB/account, separate from preparation usage. Cancellation revokes approval but retains the private history. Deleting any linked job, profile or included draft, or deleting the workspace, erases the package and document links. Private exports include exact packages; preparation import never restores them or their approval authority. Authorized assistants can read approval summaries, and existing export permission includes package content. An approved package is not a submission and does not enable employer execution.</p>';
+    document.querySelector("#section")!.prepend(packagePrivacy);
   }
   const importFile = document.querySelector<HTMLInputElement>("#import-file");
   if (importFile) {
@@ -180,6 +198,7 @@ function wireSection() {
     const section = document.querySelector(".split > section"), current = state!.outcomes.find(item => item.job_id === selectedJob);
     if (section) {
       void mountHandoffs(section, selectedJob, records("draft").filter(record => record.job_id === selectedJob), api, refresh, busy).catch(error => message(error instanceof Error ? error.message : "Handoffs unavailable. Refresh before continuing."));
+      void mountExecutor(section, selectedJob, records("draft").filter(record => record.job_id === selectedJob), api, busy, refresh).catch(error => message(error instanceof Error ? error.message : "Executor unavailable. Live submission remains locked."));
       const box = document.createElement("section"); box.className = "box";
       box.innerHTML = `<h2>Outcome &amp; next step</h2><p>Record an event you personally know happened. This does not send a message, accept an offer, or create a scheduled reminder.</p>${current ? `<p><span class="badge success">Candidate-recorded: ${esc(current.status)}</span></p><p>${esc(current.note)}</p>${current.next_action_at ? `<small>Next action noted for ${esc(current.next_action_at)}</small>` : ""}` : ""}<form id="outcome-form"><label for="outcome-status">Known outcome</label><select id="outcome-status">${["interviewing", "offered", "accepted", "rejected", "withdrawn", "closed"].map(status => `<option ${current?.status === status ? "selected" : ""}>${status}</option>`).join("")}</select>${area("outcome-note", "What happened / next step", current?.note ?? "", true)}${field("outcome-date", "Optional next-action date (your local timezone)", "", "datetime-local")}<button>Record my outcome</button></form>`;
       section.append(box);

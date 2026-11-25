@@ -10,7 +10,8 @@
   "build": { "command": "node scripts/build-web.mjs" },
   "rules": [{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true }],
   "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none", "not_found_handling": "none" },
-  "vars": { "PUBLIC_ORIGIN": "https://william.biggers.family", "RP_ID": "william.biggers.family" },
+  "vars": { "PUBLIC_ORIGIN": "https://william.biggers.family", "RP_ID": "william.biggers.family", "EXECUTOR_HOSTS": "william.biggers.family,job-boards.greenhouse.io,boards.greenhouse.io,jobs.lever.co,jobs.ashbyhq.com" },
+  "services": [{ "binding": "DELEGATED_EXECUTOR", "service": "job-application-executor" }],
   "d1_databases": [{ "binding": "DB", "database_name": "job-search-workspace", "database_id": "8fa1f985-c680-406e-96d8-465bfbd4516b", "migrations_dir": "migrations" }],
   "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "12478c9ab529403cac7ebeae40f1c81a" }],
   "ratelimits": [

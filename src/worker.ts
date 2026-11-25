@@ -7,6 +7,9 @@ import { workflows } from "./workflows.ts";
 import { BASE, boundedBody, contentSecurityPolicy, escapeHtml, hash, HttpError, jsonBody, sameOrigin, SCOPES, secure, token } from "./security.ts";
 import { kindSchema, saveSchema, WorkspaceStore } from "./store.ts";
 import { SubmissionStore } from "./submissions.ts";
+import { ExecutorStore } from "./executor-store.ts";
+import { executorFixture } from "./executor-fixture.ts";
+import { ApplicationPackageStore } from "./application-package-store.ts";
 
 type Env = Cloudflare.Env;
 const propsSchema = z.object({ userId: z.string().uuid(), epoch: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
@@ -68,9 +71,17 @@ async function authorize(request: Request, env: Env, server: OAuthAuthorizationS
   return new Response(null, { status: 302, headers: approved.headers });
 }
 
+async function stopTakeover(env: Env, userId: string): Promise<boolean> {
+  try {
+    const response = await env.DELEGATED_EXECUTOR.fetch(new Request("https://executor.internal/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation: "takeover", user_id: userId, epoch: "0".repeat(64), action: "revoke" }) }));
+    const parsed = z.object({ takeover: z.object({ phase: z.string() }).passthrough().nullable() }).passthrough().safeParse(JSON.parse(await boundedBody(response, 2000)));
+    return response.ok && parsed.success && (!parsed.data.takeover || parsed.data.takeover.phase === "closed");
+  } catch { return false; } // The durable alarm still retries; never claim a failed close succeeded.
+}
 async function revokeAll(env: Env, server: OAuthAuthorizationServer<Env>, userId: string): Promise<void> {
   // The strongly consistent epoch check denies every old token even while KV revocation propagates.
   await env.DB.prepare("UPDATE users SET epoch=? WHERE id=?").bind(token(), userId).run();
+  await stopTakeover(env, userId);
   const oauth = server.getOAuthApi(env);
   let cursor: string | undefined;
   do {
@@ -86,6 +97,56 @@ async function api(request: Request, env: Env, path: string, server: OAuthAuthor
   const user = await requireUser(request, env);
   const store = new WorkspaceStore(env.DB, user.id, "website");
   const submissions = new SubmissionStore(store);
+  const executor = new ExecutorStore(store, env.DELEGATED_EXECUTOR, env.EXECUTOR_HOSTS.split(","), env.PUBLIC_ORIGIN);
+  const packages = new ApplicationPackageStore(store, jobId => executor.inspect(jobId));
+  if (path === "executor" && request.method === "GET") return Response.json({ intents: await executor.list(), packages: await packages.list(), paused: await executor.paused(), live_submission_enabled: false });
+  if (path === "executor/takeover" && request.method === "POST") {
+    const body = z.discriminatedUnion("action", [
+      z.object({ action: z.literal("start_fixture"), confirmation: z.literal("FICTIONAL TAKEOVER ONLY — NO PERSONAL DATA") }).strict(),
+      z.object({ action: z.literal("status") }).strict(),
+      z.object({ action: z.literal("view"), id: z.string().uuid(), confirmation: z.literal("OPEN PRIVATE FICTIONAL CONTROL") }).strict(),
+      z.object({ action: z.enum(["cancel", "complete"]), id: z.string().uuid() }).strict(),
+    ]).parse(await jsonBody(request, 1000));
+    const response = await env.DELEGATED_EXECUTOR.fetch(new Request("https://executor.internal/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation: "takeover", user_id: user.id, epoch: user.epoch, action: body.action, ...("id" in body ? { id: body.id } : {}) }) }));
+    // Never feed control capabilities to MCP, exports, events or exception messages.
+    return new Response(await boundedBody(response, 22000), { status: response.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+  }
+  if (path === "packages" && request.method === "GET") return Response.json({ packages: await packages.list() });
+  if (path === "packages/preview" && request.method === "POST") return Response.json({ package: await packages.preview(await jsonBody(request, 12000)) });
+  if (path === "packages/approve" && request.method === "POST") return Response.json(await packages.approve(await jsonBody(request, 14000)));
+  if (path === "packages/revalidate" && request.method === "POST") {
+    const body = z.object({ id: z.string().uuid() }).strict().parse(await jsonBody(request, 1000));
+    return Response.json(await packages.revalidate(body.id));
+  }
+  if (path.startsWith("packages/") && request.method === "GET") return Response.json(await packages.get(path.slice(9)));
+  if (path.startsWith("packages/") && request.method === "DELETE") {
+    z.object({ confirmation: z.literal("CANCEL EXACT PACKAGE") }).strict().parse(await jsonBody(request, 1000));
+    await packages.cancel(path.slice(9)); return Response.json({ ok: true });
+  }
+  if (path === "executor/inspect" && request.method === "POST") {
+    const body = z.object({ job_id: z.string().uuid() }).strict().parse(await jsonBody(request, 1000));
+    return Response.json(await executor.inspect(body.job_id));
+  }
+  if (path === "executor/render" && request.method === "POST") {
+    const body = z.object({ job_id: z.string().uuid() }).strict().parse(await jsonBody(request, 1000));
+    return Response.json(await executor.render(body.job_id));
+  }
+  if (path === "executor/fixture-check" && request.method === "POST") {
+    z.object({ confirmation: z.literal("FICTIONAL INFRASTRUCTURE TEST ONLY") }).strict().parse(await jsonBody(request, 1000));
+    return Response.json(await executor.fixtureCheck());
+  }
+  if (path === "executor/approve" && request.method === "POST") return Response.json(await executor.approve(await jsonBody(request, 90000)));
+  if (path === "executor/action" && request.method === "POST") {
+    const body = z.object({ id: z.string().uuid(), action: z.enum(["run", "cancel"]) }).strict().parse(await jsonBody(request, 1000));
+    if (body.action === "cancel") { await executor.cancel(body.id); return Response.json({ ok: true }); }
+    return Response.json(await executor.run(body.id));
+  }
+  if (path === "executor/pause" && request.method === "POST") {
+    const body = z.object({ paused: z.boolean() }).strict().parse(await jsonBody(request, 1000));
+    await executor.pause(body.paused);
+    const takeoverClosed = body.paused ? await stopTakeover(env, user.id) : undefined;
+    return Response.json({ ok: true, ...(body.paused ? { takeover_cleanup_pending: !takeoverClosed } : {}) });
+  }
   if (path === "handoffs" && request.method === "GET") return Response.json({ handoffs: await submissions.list() });
   if (path === "handoffs/preview" && request.method === "POST") {
     const body = z.object({ job_id: z.string().uuid(), draft_id: z.string().uuid() }).strict().parse(await jsonBody(request, 1000));
@@ -108,7 +169,7 @@ async function api(request: Request, env: Env, path: string, server: OAuthAuthor
   }
   if (path === "state" && request.method === "GET") {
     const grants = await server.getOAuthApi(env).listUserGrants(user.id, { limit: 30 });
-    return Response.json({ user: { name: user.name, created_at: user.created_at }, usage: await store.usage(), records: await store.list(), reviews: await store.reviews(), outcomes: await store.outcomes(), handoffs: await store.handoffs(), connections: grants.items.map(grant => ({ id: grant.id, clientId: grant.clientId, scope: grant.scope, createdAt: grant.createdAt, current: grant.metadata?.epoch === user.epoch })) });
+    return Response.json({ user: { name: user.name, created_at: user.created_at }, usage: await store.usage(), records: await store.list(), reviews: await store.reviews(), outcomes: await store.outcomes(), handoffs: await store.handoffs(), application_packages: await store.packageApprovals(), connections: grants.items.map(grant => ({ id: grant.id, clientId: grant.clientId, scope: grant.scope, createdAt: grant.createdAt, current: grant.metadata?.epoch === user.epoch })) });
   }
   if (path === "export" && request.method === "GET") return Response.json(await store.export(), { headers: { "Content-Disposition": 'attachment; filename="job-search-workspace.json"' } });
   if (path.startsWith("versions/") && request.method === "GET") return Response.json({ versions: await store.versions(z.string().uuid().parse(path.slice(9))) });
@@ -162,7 +223,8 @@ export default {
         const ip = request.headers.get("CF-Connecting-IP") ?? "local";
         const limiter = isAuth ? env.AUTH_LIMIT : env.REQUEST_LIMIT;
         if (!(await limiter.limit({ key: await hash(`${ip}:${isAuth ? "auth" : "requests"}`) })).success) throw new HttpError(429, "Too many requests. Try again in a minute.");
-        if (url.pathname === `${BASE}/oauth/authorize`) response = await authorize(request, env, server);
+        if (url.pathname === `${BASE}/workspace/executor-fixture`) response = await executorFixture(request);
+        else if (url.pathname === `${BASE}/oauth/authorize`) response = await authorize(request, env, server);
         else if (url.pathname.startsWith(`${BASE}/api/`)) response = await api(request, env, url.pathname.slice(`${BASE}/api/`.length), server);
         else if (url.pathname === `${BASE}/mcp` || url.pathname === `/.well-known/oauth-protected-resource${BASE}/mcp`) {
           const resource = new OAuthResourceServer<Env, Props>({

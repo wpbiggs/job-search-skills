@@ -20,7 +20,7 @@ export function cookieHeader(name: string, value: string, maxAge: number, origin
 export function sameOrigin(request: Request, origin: string): void {
   if (request.headers.get("Origin") !== origin || request.headers.get("Sec-Fetch-Site") === "cross-site") throw new HttpError(403, "A same-origin browser action is required.");
 }
-export async function boundedBody(request: Request, max = 100_000): Promise<string> {
+export async function boundedBody(request: Pick<Request, "body" | "headers">, max = 100_000): Promise<string> {
   if (Number(request.headers.get("Content-Length")) > max) throw new HttpError(413, "Request is too large.");
   const reader = request.body?.getReader();
   if (!reader) return "";

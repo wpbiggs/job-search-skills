@@ -15,6 +15,7 @@ node_modules/
 .wrangler/
 .dev.vars*
 worker-configuration.d.ts
+services/**/worker-configuration.d.ts
 public/job-search/workspace/app.js
 public/job-search/workspace/app.js.map
 *.sqlite*

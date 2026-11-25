@@ -91,9 +91,7 @@ This mode consumes three public metadata slots. `test/application-package.test.t
 - GitHub check-run `139408178289` still reports an account billing lock. Local/deployed verification is separate evidence, not a hosted-CI pass.
 - This proves the ordinary package storage/review binding, **not the complete goal**: suitable-role discovery, real tailored candidate materials, rendered-form execution grants, a production employer runner, secure candidate takeover and real employer receipt/response verification still need end-to-end evidence. No real pilot outcome is claimed.
 
-## Unfinished execution work
-
-### Rendered inspection (inspection only)
+## Rendered inspection (inspection only)
 
 `src/employer-rendered.ts` and `src/employer-rendered-browser.ts` add an owner-scoped website operation, `POST executor/render` with an owned `job_id`. It passes no applicant answers or documents to the private browser service. It reserves two units atomically from the existing ten-unit daily combined budget, fetches fresh public metadata, then opens a fresh JavaScript-enabled context. Recording, service workers, downloads and permissions are disabled. The existing two-browser lease and 45-second browser deadline remain in force.
 
@@ -114,6 +112,18 @@ CHECK_RENDERED_FIXTURE=1 npm run check:greenhouse:deployed
 ```
 
 Run separately from `CHECK_PACKAGE_FIXTURE=1`; do not widen the daily budget to run both. The temporary owned workspace is erased on completion or failure. Cloudflare guardrail and recording behavior follows the installed `@cloudflare/playwright` 1.4.0 types and [guardrail documentation](https://developers.cloudflare.com/browser-run/features/guardrails/).
+
+### Deployed rendered verification (2026-11-25 UTC)
+
+- Runtime commit `172dfbb`, workspace version `3cc128e7-750a-499c-8b6f-2379fb7b0f45`, private executor version `d9beab63-e329-4c82-9e6e-a2da2c9ea2de`. No schema migration or existing approval-scope change.
+- Passed typechecks, 112 Node tests, 17 Python tests, both dry-run bundles, Chromium package/isolated-world tests and the isolated workerd browser/OAuth/MCP suite. Redirect targets, wrong content types and multiple forms are rejected in intercepted Chromium tests.
+- Actual Cloudflare rendered fixture passed at `2026-11-25T20:24:14.281Z` against the explicitly scoped public Greenhouse URL above. Eight public question groups versus ten rendered controls: country and an anonymous control were unreviewed; the script-managed default-GET form and two blocked active resources prevented readiness. Seven allowed assets loaded without asset load failures; two consecutive observations were stable. **This is a verified safe stop, not successful execution parity.**
+- Public rendered fingerprint: `5a4d195624836735cb71005cae73ea16dc6f91b0903e12adb3f89b717eaafea8`. No applicant fields/documents were supplied, no values collected, no employer writes observed, no submission/receipt created and no interactive session retained. The temporary account was deleted.
+- Read-only cleanup metadata confirmed zero rendered-fixture accounts, exact packages, package links, executor intents/attempts and browser leases. Budget increased from six to nine; another two-unit render is not permitted today. Do not bypass or widen the budget for a retry.
+- Public smoke checks passed and the deployed application asset matched the build (SHA-256 `6151eecc65491e10a71091acb74e9d8f5339104eacf35e88f36538e170cef4e2`). Real employer applications submitted: zero. The end-to-end objective remains incomplete.
+- Fresh hosted check-run `139488564152` could not start due to the GitHub account billing lock. The local/runtime checks above do not establish a hosted-CI pass.
+
+## Unfinished execution work
 
 1. Bind the implemented ordinary package to a verified rendered-form revision and a separately permitted execution grant. Current approval binds job, profile, documents and public question metadata; it does not waive pending takeover, rendered-form or final-action policy gates.
 2. A rendered Greenhouse browser adapter with bounded egress, exact approved upload bytes, question/control parity and a tested candidate takeover path. Do not execute with unreviewed JavaScript/network destinations simply because the public API looked ordinary.

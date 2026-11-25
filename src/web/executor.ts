@@ -6,6 +6,7 @@ import type { RenderedInspection } from "../employer-rendered.ts";
 import { mountPackageReview, mountPackageHistory } from "./package-review.ts";
 import type { PackageSummary } from "../application-package-store.ts";
 import type { RecordRow } from "../store.ts";
+import { mountTakeover } from "./takeover.ts";
 
 type Api = <T>(path: string, method?: string, body?: unknown) => Promise<T>;
 export async function mountExecutor(section: Element, jobId: string, drafts: RecordRow[], api: Api, busy: (action: () => Promise<void>) => Promise<void>, refresh: () => Promise<void>) {
@@ -48,4 +49,5 @@ export async function mountExecutor(section: Element, jobId: string, drafts: Rec
   })));
   for (const id of ["#executor-inspect", "#executor-fixture"]) box.querySelector<HTMLButtonElement>(id)!.disabled = state.paused;
   mountPackageHistory(box, state.packages ?? [], jobId, api, busy, refresh);
+  await mountTakeover(box, api, busy);
 }

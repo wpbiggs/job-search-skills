@@ -8,6 +8,8 @@
   "workers_dev": false,
   "preview_urls": false,
   "browser": { "binding": "BROWSER" },
+  "durable_objects": { "bindings": [{ "name": "TAKEOVERS", "class_name": "CandidateTakeover" }] },
+  "migrations": [{ "tag": "v1-takeovers", "new_sqlite_classes": ["CandidateTakeover"] }],
   "d1_databases": [{ "binding": "DB", "database_name": "job-search-workspace", "database_id": "8fa1f985-c680-406e-96d8-465bfbd4516b" }],
   "vars": {
     "FIXTURE_ORIGIN": "https://william.biggers.family",

@@ -2,13 +2,15 @@ import { launch } from "@cloudflare/playwright";
 import { z } from "zod";
 import { employerUrl, formSchema, payloadSchema, EXECUTOR_FIXTURE_DOCUMENT } from "../../src/executor-contract.ts";
 import { inspectBrowser, runBrowser } from "../../src/executor-browser.ts";
-import { hash, jsonBody } from "../../src/security.ts";
+import { hash, HttpError, jsonBody } from "../../src/security.ts";
 import { greenhouseTarget, inspectGreenhouse, type GreenhouseInspection } from "../../src/employer-greenhouse.ts";
 import { inspectGreenhouseRendered } from "../../src/employer-rendered-browser.ts";
 import { GREENHOUSE_ASSET_HOST } from "../../src/employer-rendered.ts";
 import { claimInspectionBudget } from "../../src/executor-budget.ts";
+export { CandidateTakeover } from "./takeover.ts";
 
 const command = z.discriminatedUnion("operation", [
+  z.object({ operation: z.literal("takeover"), user_id: z.string().uuid(), epoch: z.string().regex(/^[a-f0-9]{64}$/), action: z.enum(["start_fixture", "status", "view", "cancel", "complete", "revoke"]), id: z.string().uuid().optional() }).strict(),
   z.object({ operation: z.literal("inspect"), destination: z.string().max(2048) }).strict(),
   z.object({ operation: z.literal("render"), destination: z.string().max(2048) }).strict(),
   z.object({ operation: z.literal("fixture") }).strict(),
@@ -24,10 +26,14 @@ export default {
     let leaseId: string | undefined;
     let deadline: ReturnType<typeof setTimeout> | undefined;
     let deadlineClose: Promise<void> | undefined;
-    let operation: "inspect" | "render" | "fixture" | "run" | undefined;
+    let operation: "inspect" | "render" | "fixture" | "run" | "takeover" | undefined;
     try {
       const input = command.parse(await jsonBody(request, 2000));
       operation = input.operation;
+      if (input.operation === "takeover") {
+        const result = await env.TAKEOVERS.getByName(input.user_id).command({ user_id: input.user_id, epoch: input.epoch }, input.action, input.id);
+        return Response.json(result, { headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+      }
       const hosts = env.ALLOWED_HOSTS.split(",");
       let row: { destination: string; form: string; payload: string } | null = null;
       if (input.operation === "run") {
@@ -80,7 +86,8 @@ export default {
         return Boolean(claimed);
       }, env.FIXTURE_ORIGIN);
       return Response.json(result);
-    } catch {
+    } catch (error) {
+      if (operation === "takeover") return Response.json({ status: "needs_user", reason: "Takeover unavailable, changed or closing. Check its status; do not retry a start automatically.", execution_enabled: false }, { status: error instanceof HttpError ? error.status : 503 });
       return Response.json(operation === "run" || operation === "fixture"
         ? { status: "uncertain", reason: "Browser service interrupted. Check the attempt; do not retry automatically." }
         : { status: "needs_user", reason: "Read-only inspection interrupted or destination unsupported. No applicant data was entered; no automatic retry." }, { status: 503 });

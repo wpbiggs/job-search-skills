@@ -16,8 +16,10 @@
     "test:executor": "node --import tsx scripts/test-executor-browser.mjs",
     "test:packages": "node --import tsx scripts/test-package-ui.mjs",
     "test:rendered": "node --import tsx scripts/test-rendered-browser.mjs",
+    "test:takeover": "node scripts/test-takeover-runtime.mjs && node scripts/test-takeover-ui.mjs",
     "check:executor:deployed": "node scripts/check-executor-deployed.mjs",
     "check:greenhouse:deployed": "node --import tsx scripts/check-greenhouse-deployed.mjs",
+    "check:takeover:deployed": "node scripts/check-takeover-deployed.mjs",
     "build": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
     "mcp:local": "tsx src/local.ts"

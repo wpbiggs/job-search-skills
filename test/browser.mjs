@@ -260,6 +260,9 @@ try {
     results.push("Actual private service binding and isolated Cloudflare browser completed an owned synthetic ATS test; synthetic receipt is not an employer submission");
   }
   results.push("Executor token/CSRF boundaries, candidate pause control, isolated state and locked live final submission");
+  // Keep expanded boundary probes within the real 120/minute production limit.
+  // Do not disable the limiter in tests or widen it for a release.
+  await new Promise(resolve => setTimeout(resolve, 61_000));
   const packageTokenOnly = await fetch(`${origin}/job-search/api/packages/approve`, { method: "POST", headers: { Authorization: `Bearer ${readOnly.tokens.access_token}`, Origin: origin, "Content-Type": "application/json" }, body: "{}" });
   assert.equal(packageTokenOnly.status, 401);
   const packageCsrf = await other.context.request.post(`${origin}/job-search/api/packages/approve`, { headers: { Origin: "https://untrusted.example" }, data: {} });
@@ -269,9 +272,12 @@ try {
   assert.equal(renderTokenOnly.status, 401);
   const renderCsrf = await other.context.request.post(`${origin}/job-search/api/executor/render`, { headers: { Origin: "https://untrusted.example" }, data: {} });
   assert.equal(renderCsrf.status(), 403);
-  // Keep the expanded fixture suite within the real 120/minute production limit.
-  // Do not disable the limiter in tests or widen it for a release.
-  await new Promise(resolve => setTimeout(resolve, 61_000));
+  const takeoverTokenOnly = await fetch(`${origin}/job-search/api/executor/takeover`, { method: "POST", headers: { Authorization: `Bearer ${readOnly.tokens.access_token}`, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ action: "status" }) });
+  assert.equal(takeoverTokenOnly.status, 401);
+  const takeoverCsrf = await other.context.request.post(`${origin}/job-search/api/executor/takeover`, { headers: { Origin: "https://untrusted.example" }, data: { action: "status" } });
+  assert.equal(takeoverCsrf.status(), 403);
+  const takeoverPayload = await webApi(other.page, "executor/takeover", "POST", { action: "start_fixture", confirmation: "FICTIONAL TAKEOVER ONLY — NO PERSONAL DATA", destination: "https://untrusted.example" });
+  assert.equal(takeoverPayload.status, 400);
   decoded(await connection.client.callTool({ name: "save_profile", arguments: { id: profile.id, expected_revision: profile.revision, data: { ...profile.data, goals: "Updated fictional goals requiring reassessment" } } }));
   await alice.page.getByRole("button", { name: "Refresh records" }).click();
   await alice.page.getByText("Profile changed since this assessment — ask your assistant to reassess.", { exact: true }).waitFor();

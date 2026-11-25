@@ -33,4 +33,5 @@ jobs:
       - run: npm run test:executor
       - run: npm run test:packages
       - run: npm run test:rendered
+      - run: npm run test:takeover
       - run: npm run test:worker

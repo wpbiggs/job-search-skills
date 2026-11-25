@@ -71,9 +71,17 @@ async function authorize(request: Request, env: Env, server: OAuthAuthorizationS
   return new Response(null, { status: 302, headers: approved.headers });
 }
 
+async function stopTakeover(env: Env, userId: string): Promise<boolean> {
+  try {
+    const response = await env.DELEGATED_EXECUTOR.fetch(new Request("https://executor.internal/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation: "takeover", user_id: userId, epoch: "0".repeat(64), action: "revoke" }) }));
+    const parsed = z.object({ takeover: z.object({ phase: z.string() }).passthrough().nullable() }).passthrough().safeParse(JSON.parse(await boundedBody(response, 2000)));
+    return response.ok && parsed.success && (!parsed.data.takeover || parsed.data.takeover.phase === "closed");
+  } catch { return false; } // The durable alarm still retries; never claim a failed close succeeded.
+}
 async function revokeAll(env: Env, server: OAuthAuthorizationServer<Env>, userId: string): Promise<void> {
   // The strongly consistent epoch check denies every old token even while KV revocation propagates.
   await env.DB.prepare("UPDATE users SET epoch=? WHERE id=?").bind(token(), userId).run();
+  await stopTakeover(env, userId);
   const oauth = server.getOAuthApi(env);
   let cursor: string | undefined;
   do {
@@ -92,6 +100,17 @@ async function api(request: Request, env: Env, path: string, server: OAuthAuthor
   const executor = new ExecutorStore(store, env.DELEGATED_EXECUTOR, env.EXECUTOR_HOSTS.split(","), env.PUBLIC_ORIGIN);
   const packages = new ApplicationPackageStore(store, jobId => executor.inspect(jobId));
   if (path === "executor" && request.method === "GET") return Response.json({ intents: await executor.list(), packages: await packages.list(), paused: await executor.paused(), live_submission_enabled: false });
+  if (path === "executor/takeover" && request.method === "POST") {
+    const body = z.discriminatedUnion("action", [
+      z.object({ action: z.literal("start_fixture"), confirmation: z.literal("FICTIONAL TAKEOVER ONLY — NO PERSONAL DATA") }).strict(),
+      z.object({ action: z.literal("status") }).strict(),
+      z.object({ action: z.literal("view"), id: z.string().uuid(), confirmation: z.literal("OPEN PRIVATE FICTIONAL CONTROL") }).strict(),
+      z.object({ action: z.enum(["cancel", "complete"]), id: z.string().uuid() }).strict(),
+    ]).parse(await jsonBody(request, 1000));
+    const response = await env.DELEGATED_EXECUTOR.fetch(new Request("https://executor.internal/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation: "takeover", user_id: user.id, epoch: user.epoch, action: body.action, ...("id" in body ? { id: body.id } : {}) }) }));
+    // Never feed control capabilities to MCP, exports, events or exception messages.
+    return new Response(await boundedBody(response, 22000), { status: response.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+  }
   if (path === "packages" && request.method === "GET") return Response.json({ packages: await packages.list() });
   if (path === "packages/preview" && request.method === "POST") return Response.json({ package: await packages.preview(await jsonBody(request, 12000)) });
   if (path === "packages/approve" && request.method === "POST") return Response.json(await packages.approve(await jsonBody(request, 14000)));
@@ -124,7 +143,9 @@ async function api(request: Request, env: Env, path: string, server: OAuthAuthor
   }
   if (path === "executor/pause" && request.method === "POST") {
     const body = z.object({ paused: z.boolean() }).strict().parse(await jsonBody(request, 1000));
-    await executor.pause(body.paused); return Response.json({ ok: true });
+    await executor.pause(body.paused);
+    const takeoverClosed = body.paused ? await stopTakeover(env, user.id) : undefined;
+    return Response.json({ ok: true, ...(body.paused ? { takeover_cleanup_pending: !takeoverClosed } : {}) });
   }
   if (path === "handoffs" && request.method === "GET") return Response.json({ handoffs: await submissions.list() });
   if (path === "handoffs/preview" && request.method === "POST") {

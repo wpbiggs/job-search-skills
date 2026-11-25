@@ -126,6 +126,8 @@ Run separately from `CHECK_PACKAGE_FIXTURE=1`; do not widen the daily budget to 
 
 ## Unfinished execution work
 
+The separate [fictional takeover controller](TAKEOVER.md) now implements owner-bound persistent pause/control/close infrastructure. It cannot open employer pages or consume preparation packages; it does not close the real-employer takeover gap below.
+
 1. Bind the implemented ordinary package to a verified rendered-form revision and a separately permitted execution grant. Current approval binds job, profile, documents and public question metadata; it does not waive pending takeover, rendered-form or final-action policy gates.
 2. A rendered Greenhouse browser adapter with bounded egress, exact approved upload bytes, question/control parity and a tested candidate takeover path. Do not execute with unreviewed JavaScript/network destinations simply because the public API looked ordinary.
 3. Secure interactive takeover for authentication, challenges and candidate-only legal/sensitive decisions; changed forms/destinations invalidate authority. Never automate attestations or bypass challenges.

@@ -3,6 +3,13 @@ import { z } from "zod";
 import { employerUrl, formSchema, payloadSchema, EXECUTOR_FIXTURE_DOCUMENT } from "../../src/executor-contract.ts";
 import { inspectBrowser, runBrowser } from "../../src/executor-browser.ts";
 import { hash, jsonBody } from "../../src/security.ts";
+import { greenhouseTarget, inspectGreenhouse } from "../../src/employer-greenhouse.ts";
+
+async function claimInspectionBudget(db: D1Database): Promise<boolean> {
+  const quota = await db.prepare("INSERT INTO executor_budget(day,used) VALUES(?,1) ON CONFLICT(day) DO UPDATE SET used=used+1 WHERE used<10 RETURNING used").bind(new Date().toISOString().slice(0, 10)).first();
+  await db.prepare("DELETE FROM executor_budget WHERE day<?").bind(new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)).run();
+  return Boolean(quota);
+}
 
 const command = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("inspect"), destination: z.string().max(2048) }).strict(),
@@ -19,8 +26,10 @@ export default {
     let leaseId: string | undefined;
     let deadline: ReturnType<typeof setTimeout> | undefined;
     let deadlineClose: Promise<void> | undefined;
+    let operation: "inspect" | "fixture" | "run" | undefined;
     try {
       const input = command.parse(await jsonBody(request, 2000));
+      operation = input.operation;
       const hosts = env.ALLOWED_HOSTS.split(",");
       let row: { destination: string; form: string; payload: string } | null = null;
       if (input.operation === "run") {
@@ -29,15 +38,17 @@ export default {
         if (new URL(row.destination).origin !== env.FIXTURE_ORIGIN) return Response.json({ status: "needs_user", reason: "Live final submission is disabled by the candidate-control contract and pending employer-adapter validation." });
       }
       const destination = employerUrl(input.operation === "fixture" ? `${env.FIXTURE_ORIGIN}/job-search/workspace/executor-fixture` : input.operation === "inspect" ? input.destination : row!.destination, hosts);
+      if (input.operation === "inspect" && greenhouseTarget(destination)) {
+        if (!await claimInspectionBudget(env.DB)) return Response.json({ status: "needs_user", reason: "Daily inspection/browser budget reached; no automatic retry." }, { status: 429 });
+        return Response.json(await inspectGreenhouse(destination));
+      }
       const now = new Date().toISOString();
       await env.DB.prepare("DELETE FROM executor_browser_leases WHERE expires_at<=?").bind(now).run();
       const lease = crypto.randomUUID();
       const acquired = await env.DB.prepare("INSERT INTO executor_browser_leases(id,expires_at) SELECT ?,? WHERE (SELECT count(*) FROM executor_browser_leases)<2 RETURNING id").bind(lease, new Date(Date.now() + 120000).toISOString()).first();
       if (!acquired) return Response.json({ status: "needs_user", reason: "Two isolated browser sessions are already running; no automatic retry." }, { status: 429 });
       leaseId = lease;
-      const quota = await env.DB.prepare("INSERT INTO executor_budget(day,used) VALUES(?,1) ON CONFLICT(day) DO UPDATE SET used=used+1 WHERE used<10 RETURNING used").bind(new Date().toISOString().slice(0, 10)).first();
-      await env.DB.prepare("DELETE FROM executor_budget WHERE day<?").bind(new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)).run();
-      if (!quota) return Response.json({ status: "needs_user", reason: "Global browser budget reached (10 sessions/day); no automatic retries." }, { status: 429 });
+      if (!await claimInspectionBudget(env.DB)) return Response.json({ status: "needs_user", reason: "Global inspection/browser budget reached (10/day); no automatic retries." }, { status: 429 });
       browser = await launch(env.BROWSER, { guardrails: { allowedDomains: [new URL(destination).hostname] }, keep_alive: 60000 });
       deadline = setTimeout(() => { deadlineClose = browser!.close().catch(() => {}); }, 45000);
       const context = await browser.newContext({ javaScriptEnabled: false, serviceWorkers: "block", acceptDownloads: false });
@@ -60,7 +71,9 @@ export default {
       }, env.FIXTURE_ORIGIN);
       return Response.json(result);
     } catch {
-      return Response.json({ status: "uncertain", reason: "Browser service interrupted. Check the attempt; do not retry automatically." }, { status: 503 });
+      return Response.json(operation === "run" || operation === "fixture"
+        ? { status: "uncertain", reason: "Browser service interrupted. Check the attempt; do not retry automatically." }
+        : { status: "needs_user", reason: "Read-only inspection interrupted or destination unsupported. No applicant data was entered; no automatic retry." }, { status: 503 });
     } finally {
       clearTimeout(deadline);
       await deadlineClose;

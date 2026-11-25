@@ -29,6 +29,7 @@ npm test
 npm run build:executor
 npm run build
 npm run test:executor
+npm run test:packages
 npm run test:worker
 ```
 
@@ -44,6 +45,32 @@ npm run check:greenhouse:deployed
 
 This consumes one metadata-read slot and contacts the specified public job API. It never uploads applicant materials or submits to an employer. Evidence is written to ignored `test-results/greenhouse-deployed.json`. The normal regression suite does not contact real employers.
 
+## Exact ordinary-data/document package
+
+`src/application-package.ts`, `src/application-package-store.ts` and `migrations/0006_application_packages.sql` implement the candidate-owned ordinary-package foundation. **It does not authorize execution, certify sensitive answers or grant final-submission permission.** Every package and summary exposes `approval_scope: ordinary-data-and-documents-only` and `execution_enabled: false`. The queue labels an approved package as **execution pending**, never submitted or independently receipt-verified.
+
+- The server rebuilds previews from owned saved documents and a fresh provider inspection. It does not accept client-supplied document contents, a fabricated inspection, an execution flag or a ready-made package. Approval repeats the provider/document check and requires the exact displayed SHA-256 digest.
+- Every provider question needs exactly one explicit decision: supported ordinary answer, a compatible saved document alternative, an optional skip or a deferred candidate step. Required questions cannot be silently skipped. Exactly one current, evidence-checked résumé is required; one compatible cover letter is optional. All document bytes and revisions are included in review.
+- Supported ordinary answers are exact standard contact values and explicitly reviewed custom Website/LinkedIn URL fields. Unknown, protected, legal and sensitive answers are not accepted as ordinary package fields. Deferred questions preserve their labels, not inferred answers; protected optional skips are explicit candidate choices, not an inferred "prefer not to say" answer.
+- The UI states that preview sends values to the private workspace for validation, and approval stores the exact package there. It shows the employer/destination, answers, document bytes/hashes, explicit skips, deferred steps and pending execution gates before candidate confirmation. Unsaved document edits, input changes and delayed stale preview responses cannot reuse an older review.
+- Candidate-only website routes: `POST packages/preview`, `POST packages/approve`, `GET packages`, `GET packages/{id}`, `POST packages/revalidate` and `DELETE packages/{id}` (cancellation). Same-origin/passkey-session checks apply. MCP tokens cannot approve; authorized assistants see preparation-approval summaries through `list_records`, not execution authority. There is no package run/submit endpoint.
+- One transactional insert checks job, profile and every document revision, account pause and prior outcomes/attempts. Only one active package per owned job can exist. Local edits synchronously mark approval stale; deleting any linked job/profile/document or the account erases exact package data and its document links. Prior opened/uncertain manual or executor attempts block new package approval rather than encouraging duplicate applications.
+- `revalidate` rechecks provider metadata and document bindings without transmitting applicant data. Changed sources mark the package stale; cancellation/expiry is never revived. A current metadata/document snapshot is **not** rendered-form parity, takeover clearance, a submission grant or an employer receipt. The future runner still needs an independent final pre-disclosure/execution gate.
+- Limits: 64 KiB UTF-8 per exact package, 50 retained packages and 1 MiB/account, separate from preparation usage. Cancellation retains private history. Exports include exact package bodies and metadata; preparation import reports and discards these approvals. No credentials or execution tokens are introduced.
+- Apply additive migration `0006_application_packages.sql` before deploying workspace code that queries these tables. Record a D1 Time Travel bookmark first. Do not restore the entire database to roll back Worker code or silently revive deleted records/grants.
+
+The current global ten-per-day metadata/browser quota is unchanged. The initial inspection, fresh preview and fresh approval each consume a metadata slot; explicit revalidation consumes another. Before a multi-application autonomous pilot, revisit separate bounded metadata/browser budgets instead of silently widening limits or disabling checks.
+
+The optional deployed package test creates only fictional source evidence, documents and contact values in its own temporary workspace, exercises the actual preview/approval UI, asserts that no employer execution/intent/receipt exists, checks synchronous profile-change invalidation, and deletes the fixture account. **Employer contact is GET-only public metadata; fictional ordinary values are sent only to the owned workspace, never to the employer.**
+
+```sh
+WORKSPACE_ORIGIN=https://william.biggers.family \
+GREENHOUSE_JOB_URL='<exact public hosted requisition URL>' \
+CHECK_PACKAGE_FIXTURE=1 npm run check:greenhouse:deployed
+```
+
+This mode consumes three public metadata slots. `test/application-package.test.ts` covers exact bindings, ownership, sensitive-field denial, revision races, prior-attempt reconciliation, cancellation/expiry/pause, revalidation, byte/count quotas, exports/imports and cascading erasure. `npm run test:packages` uses an intercepted fictional workspace and real Chromium to test the review/consent UI, unsaved edits, stale asynchronous responses, phone layouts and zero employer requests.
+
 ## Verified preflight milestone (2026-11-25 UTC)
 
 - Initial implementation commit: `d9b5686`. Workspace version: `0911f549-40f2-4fb7-85f8-db5a4721a4fb`.
@@ -56,7 +83,7 @@ This consumes one metadata-read slot and contacts the specified public job API. 
 
 ## Unfinished execution work
 
-1. Candidate-owned exact ordinary-field/document/skip package review and durable approval bound to job, profile, document and rendered-form revisions. A preflight digest alone authorizes nothing.
+1. Bind the implemented ordinary package to a verified rendered-form revision and a separately permitted execution grant. Current approval binds job, profile, documents and public question metadata; it does not waive pending takeover, rendered-form or final-action policy gates.
 2. A rendered Greenhouse browser adapter with bounded egress, exact approved upload bytes, question/control parity and a tested candidate takeover path. Do not execute with unreviewed JavaScript/network destinations simply because the public API looked ordinary.
 3. Secure interactive takeover for authentication, challenges and candidate-only legal/sensitive decisions; changed forms/destinations invalidate authority. Never automate attestations or bypass challenges.
 4. Resolution of the current final-submission contract before enabling any autonomous employer commit. The existing flag alone does not enable an employer runner.

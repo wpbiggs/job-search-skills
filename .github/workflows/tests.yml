@@ -31,4 +31,5 @@ jobs:
       - run: npm run build:executor
       - run: npx playwright install --with-deps chromium
       - run: npm run test:executor
+      - run: npm run test:packages
       - run: npm run test:worker

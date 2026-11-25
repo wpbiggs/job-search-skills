@@ -260,6 +260,11 @@ try {
     results.push("Actual private service binding and isolated Cloudflare browser completed an owned synthetic ATS test; synthetic receipt is not an employer submission");
   }
   results.push("Executor token/CSRF boundaries, candidate pause control, isolated state and locked live final submission");
+  const packageTokenOnly = await fetch(`${origin}/job-search/api/packages/approve`, { method: "POST", headers: { Authorization: `Bearer ${readOnly.tokens.access_token}`, Origin: origin, "Content-Type": "application/json" }, body: "{}" });
+  assert.equal(packageTokenOnly.status, 401);
+  const packageCsrf = await other.context.request.post(`${origin}/job-search/api/packages/approve`, { headers: { Origin: "https://untrusted.example" }, data: {} });
+  assert.equal(packageCsrf.status(), 403);
+  assert.deepEqual((await webApi(other.page, "packages")).body.packages, []);
   // Keep the expanded fixture suite within the real 120/minute production limit.
   // Do not disable the limiter in tests or widen it for a release.
   await new Promise(resolve => setTimeout(resolve, 61_000));

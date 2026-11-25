@@ -51,6 +51,17 @@ export type GreenhouseInspection = {
 export type GreenhouseResult = { inspection: GreenhouseInspection } | {
   adapter: "greenhouse-public-v1"; status: "needs_user"; code: string; reason: string; applicant_data_entered: false; live_submission_enabled: false;
 };
+export const greenhouseInspectionSchema: z.ZodType<GreenhouseInspection> = z.object({
+  adapter: z.literal("greenhouse-public-v1"), destination: z.string().max(2048), metadata_source: z.string().max(2048),
+  board: z.string().min(1).max(100), job_id: z.string().regex(/^[1-9][0-9]{0,14}$/), title: z.string().min(1).max(300), company: z.string().min(1).max(300), location: z.string().max(1000),
+  fingerprint: z.string().regex(/^[a-f0-9]{64}$/), checked_at: z.iso.datetime(),
+  questions: z.array(z.object({ id: z.string().min(1).max(100), section: z.enum(["application", "location", "compliance", "demographic"]), label: z.string().min(1).max(1000), description: z.string().max(5000).nullable(), required: z.boolean(),
+    alternatives: z.array(z.object({ name: z.string().min(1).max(100), type: z.string().min(1).max(80), options: z.array(optionSchema).max(200) }).strict()).min(1).max(5),
+    handling: z.enum(["ordinary", "document", "candidate", "unsupported"]), reason: z.string().max(500),
+  }).strict()).min(1).max(110),
+  interventions: z.array(z.object({ code: z.string().max(100), question_id: z.string().max(100).nullable(), reason: z.string().max(500) }).strict()).max(120),
+  live_submission_enabled: z.literal(false), execution_supported: z.literal(false), applicant_data_entered: z.literal(false),
+}).strict();
 const sensitive = /\b(authoriz\w*|sponsor\w*|citizen\w*|residen\w*|visa|criminal|convict\w*|disab\w*|veteran\w*|gender|ethnic\w*|race|demograph\w*|salary.history|compensation.history|consent|certif\w*|attest\w*|agree\w*|signature|terms|privacy|password|payment|captcha|social.security)\b/i;
 const knownTypes = ["input_file", "input_text", "textarea", "input_hidden", "multi_value_single_select", "multi_value_multi_select"];
 function handling(question: z.infer<typeof questionSchema>, section: EmployerQuestion["section"]): Pick<EmployerQuestion, "handling" | "reason"> {

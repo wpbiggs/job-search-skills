@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { hash, HttpError, publicJobUrl } from "./security.ts";
 import type { Handoff } from "./submissions.ts";
+import type { PackageSummary } from "./application-package-store.ts";
 
 export interface Statement {
   bind(...values: unknown[]): Statement;
@@ -58,7 +59,7 @@ function parseData(kind: Kind, input: unknown): Record<string, unknown> {
 const importSchema = z.object({
   format: z.literal("job-search-workspace"), version: z.literal(1), exported_at: z.iso.datetime(), account: z.unknown().optional(),
   records: z.array(z.object({ id: z.string().uuid(), kind: kindSchema, job_id: z.string().uuid().nullable(), data: z.unknown(), revision: z.number().int().positive(), created_at: z.iso.datetime(), updated_at: z.iso.datetime() }).strict()).min(1).max(250),
-  versions: z.array(z.unknown()).max(50000).optional(), reviews: z.array(z.unknown()).max(250).optional(), outcomes: z.array(z.unknown()).max(250).optional(), events: z.array(z.unknown()).max(200).optional(), handoffs: z.array(z.unknown()).max(250).optional(), executor: z.array(z.unknown()).max(50).optional(),
+  versions: z.array(z.unknown()).max(50000).optional(), reviews: z.array(z.unknown()).max(250).optional(), outcomes: z.array(z.unknown()).max(250).optional(), events: z.array(z.unknown()).max(200).optional(), handoffs: z.array(z.unknown()).max(250).optional(), executor: z.array(z.unknown()).max(50).optional(), application_packages: z.array(z.unknown()).max(50).optional(),
 }).strict();
 
 /** Untrusted snapshots are preparation only. Never restore authority, credentials, or owner IDs. */
@@ -111,7 +112,7 @@ export async function prepareImport(input: unknown) {
   }
   if (bytes > 2097152) throw new HttpError(413, "Imported preparation exceeds 2 MiB.");
   return { records, summary: { digest: await hash(JSON.stringify(input)), record_count: records.length, counts, bytes, unconfirmed_evidence: evidence.length,
-    not_restored: { versions: source.versions?.length ?? 0, reviews: source.reviews?.length ?? 0, outcomes: source.outcomes?.length ?? 0, events: source.events?.length ?? 0 },
+    not_restored: { versions: source.versions?.length ?? 0, reviews: source.reviews?.length ?? 0, outcomes: source.outcomes?.length ?? 0, events: source.events?.length ?? 0, application_packages: source.application_packages?.length ?? 0 },
     warnings: ["Preparation only: no credentials, confirmations, approvals, handoffs, submissions, outcomes, old history or activity are restored.", "New IDs and revision 1 are assigned. Evidence is unconfirmed; reassess and save dependent materials before approval.", "Keep the original export privately if you need its historical assertions. Nothing is sent to employers or scheduled."] } };
 }
 
@@ -245,6 +246,11 @@ export class WorkspaceStore {
   async outcomes(): Promise<Record<string, unknown>[]> {
     return (await this.db.prepare("SELECT job_id,status,note,next_action_at,updated_at FROM outcomes WHERE user_id=?").bind(this.userId).all()).results;
   }
+  async packageApprovals(): Promise<PackageSummary[]> {
+    const now = new Date().toISOString();
+    await this.db.prepare("UPDATE application_packages SET status='expired',updated_at=? WHERE user_id=? AND status='approved' AND expires_at<=?").bind(now, this.userId, now).run();
+    return (await this.db.prepare("SELECT id,job_id,status,digest,approved_at,expires_at,updated_at FROM application_packages WHERE user_id=? ORDER BY approved_at DESC,id LIMIT 50").bind(this.userId).all<Omit<PackageSummary, "approval_scope" | "execution_enabled">>()).results.map(row => ({ ...row, approval_scope: "ordinary-data-and-documents-only", execution_enabled: false }));
+  }
   async handoffs(): Promise<Handoff[]> {
     const now = new Date().toISOString();
     await this.db.prepare("UPDATE submission_intents SET status='expired',updated_at=? WHERE user_id=? AND status='approved' AND expires_at<=?").bind(now, this.userId, now).run();
@@ -298,7 +304,8 @@ export class WorkspaceStore {
     const versions = (await this.db.prepare("SELECT record_id,revision,data,saved_at FROM record_versions WHERE user_id=? ORDER BY record_id,revision").bind(this.userId).all<{ record_id: string; revision: number; data: string; saved_at: string }>()).results.map(row => ({ ...row, data: JSON.parse(row.data) }));
     const executor = (await this.db.prepare(`SELECT i.id,i.job_id,i.draft_id,i.profile_id,i.job_revision,i.draft_revision,i.profile_revision,i.destination,i.snapshot_digest,i.payload_digest,i.form,i.payload,i.status,i.reason,i.created_at,i.expires_at,i.updated_at,a.id AS attempt_id,a.started_at,a.finished_at,a.receipt
       FROM delegated_intents i LEFT JOIN delegated_attempts a ON a.intent_id=i.id WHERE i.user_id=? ORDER BY i.created_at DESC LIMIT 50`).bind(this.userId).all<{form:string;payload:string;receipt:string|null}>()).results.map(row => ({ ...row, form: JSON.parse(row.form), payload: JSON.parse(row.payload), receipt: row.receipt ? JSON.parse(row.receipt) : null }));
-    return { format: "job-search-workspace", version: 1, exported_at: new Date().toISOString(), account, records: await this.list(), versions, reviews: await this.reviews(), outcomes: await this.outcomes(), handoffs: await this.handoffs(), executor, events };
+    const applicationPackages = (await this.db.prepare("SELECT id,job_id,status,digest,approved_at,expires_at,updated_at,package FROM application_packages WHERE user_id=? ORDER BY approved_at DESC,id LIMIT 50").bind(this.userId).all<{ package: string }>()).results.map(row => ({ ...row, package: JSON.parse(row.package) }));
+    return { format: "job-search-workspace", version: 1, exported_at: new Date().toISOString(), account, records: await this.list(), versions, reviews: await this.reviews(), outcomes: await this.outcomes(), handoffs: await this.handoffs(), executor, application_packages: applicationPackages, events };
   }
   async events(): Promise<Record<string, unknown>[]> {
     return (await this.db.prepare("SELECT actor,action,record_id,created_at FROM events WHERE user_id=? ORDER BY created_at DESC,id DESC LIMIT 200").bind(this.userId).all()).results;

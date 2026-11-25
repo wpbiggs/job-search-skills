@@ -1,11 +1,13 @@
 import type { RecordRow } from "./store.ts";
 import type { Handoff } from "./submissions.ts";
+import type { PackageSummary } from "./application-package-store.ts";
 
 type QueueState = {
   records: RecordRow[];
   handoffs: Handoff[];
   reviews: { job_id: string; action: string }[];
   outcomes: { job_id: string; status: string }[];
+  application_packages?: PackageSummary[];
 };
 export type ApplicationStep = { job: RecordRow; label: string; detail: string; reviewable: boolean };
 
@@ -22,6 +24,8 @@ export function applicationQueue(state: QueueState, now = Date.now()): Applicati
     if (outcome) return step("Outcome recorded", `Candidate-recorded: ${outcome.status}. Review that outcome before any further application action.`);
     if (handoffs.some(item => item.attempt_id))
       return step("Check employer outcome", "A handoff was opened. Opening is not submission. Check the employer portal before retrying; record a receipt only if you personally submitted and saw confirmation.");
+    const exact = state.application_packages?.find(item => item.job_id === job.id && item.status === "approved" && Date.parse(item.expires_at) > now);
+    if (exact) return step("Exact package approved — execution pending", "Ordinary answers and documents are frozen. No employer submission is enabled or claimed; review pending execution/intervention steps in the job details.");
     const opening = handoffs.find(item => item.status === "approved" && Date.parse(item.expires_at) > now);
     if (opening) return step("Handoff approved", "Open the one-use manual handoff in Jobs & drafts. You upload, answer questions and perform final submission.", true);
     if (!profile) return step("Set up profile", "Add your current experience and evidence under My profile before reviewing application materials.");

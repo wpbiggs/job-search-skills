@@ -9,6 +9,7 @@ import { kindSchema, saveSchema, WorkspaceStore } from "./store.ts";
 import { SubmissionStore } from "./submissions.ts";
 import { ExecutorStore } from "./executor-store.ts";
 import { executorFixture } from "./executor-fixture.ts";
+import { ApplicationPackageStore } from "./application-package-store.ts";
 
 type Env = Cloudflare.Env;
 const propsSchema = z.object({ userId: z.string().uuid(), epoch: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
@@ -89,7 +90,20 @@ async function api(request: Request, env: Env, path: string, server: OAuthAuthor
   const store = new WorkspaceStore(env.DB, user.id, "website");
   const submissions = new SubmissionStore(store);
   const executor = new ExecutorStore(store, env.DELEGATED_EXECUTOR, env.EXECUTOR_HOSTS.split(","), env.PUBLIC_ORIGIN);
-  if (path === "executor" && request.method === "GET") return Response.json({ intents: await executor.list(), paused: await executor.paused(), live_submission_enabled: false });
+  const packages = new ApplicationPackageStore(store, jobId => executor.inspect(jobId));
+  if (path === "executor" && request.method === "GET") return Response.json({ intents: await executor.list(), packages: await packages.list(), paused: await executor.paused(), live_submission_enabled: false });
+  if (path === "packages" && request.method === "GET") return Response.json({ packages: await packages.list() });
+  if (path === "packages/preview" && request.method === "POST") return Response.json({ package: await packages.preview(await jsonBody(request, 12000)) });
+  if (path === "packages/approve" && request.method === "POST") return Response.json(await packages.approve(await jsonBody(request, 14000)));
+  if (path === "packages/revalidate" && request.method === "POST") {
+    const body = z.object({ id: z.string().uuid() }).strict().parse(await jsonBody(request, 1000));
+    return Response.json(await packages.revalidate(body.id));
+  }
+  if (path.startsWith("packages/") && request.method === "GET") return Response.json(await packages.get(path.slice(9)));
+  if (path.startsWith("packages/") && request.method === "DELETE") {
+    z.object({ confirmation: z.literal("CANCEL EXACT PACKAGE") }).strict().parse(await jsonBody(request, 1000));
+    await packages.cancel(path.slice(9)); return Response.json({ ok: true });
+  }
   if (path === "executor/inspect" && request.method === "POST") {
     const body = z.object({ job_id: z.string().uuid() }).strict().parse(await jsonBody(request, 1000));
     return Response.json(await executor.inspect(body.job_id));
@@ -130,7 +144,7 @@ async function api(request: Request, env: Env, path: string, server: OAuthAuthor
   }
   if (path === "state" && request.method === "GET") {
     const grants = await server.getOAuthApi(env).listUserGrants(user.id, { limit: 30 });
-    return Response.json({ user: { name: user.name, created_at: user.created_at }, usage: await store.usage(), records: await store.list(), reviews: await store.reviews(), outcomes: await store.outcomes(), handoffs: await store.handoffs(), connections: grants.items.map(grant => ({ id: grant.id, clientId: grant.clientId, scope: grant.scope, createdAt: grant.createdAt, current: grant.metadata?.epoch === user.epoch })) });
+    return Response.json({ user: { name: user.name, created_at: user.created_at }, usage: await store.usage(), records: await store.list(), reviews: await store.reviews(), outcomes: await store.outcomes(), handoffs: await store.handoffs(), application_packages: await store.packageApprovals(), connections: grants.items.map(grant => ({ id: grant.id, clientId: grant.clientId, scope: grant.scope, createdAt: grant.createdAt, current: grant.metadata?.epoch === user.epoch })) });
   }
   if (path === "export" && request.method === "GET") return Response.json(await store.export(), { headers: { "Content-Disposition": 'attachment; filename="job-search-workspace.json"' } });
   if (path.startsWith("versions/") && request.method === "GET") return Response.json({ versions: await store.versions(z.string().uuid().parse(path.slice(9))) });

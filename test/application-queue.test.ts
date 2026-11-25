@@ -55,6 +55,13 @@ test("candidate submission history and outcomes always take precedence over read
   f.state.handoffs = []; f.state.outcomes = [{ job_id: "job", status: "closed" }];
   assert.equal(f.label(), "Outcome recorded");
 });
+test("an approved exact preparation package is execution-pending, never a submission or a fresh manual application", () => {
+  const f = fixture();
+  f.state.application_packages = [{ id: "package", job_id: f.job.id, status: "approved", digest: "a".repeat(64), approved_at: new Date(now).toISOString(), expires_at: new Date(now + 10000).toISOString(), updated_at: new Date(now).toISOString(), approval_scope: "ordinary-data-and-documents-only", execution_enabled: false }];
+  assert.equal(f.label(), "Exact package approved — execution pending");
+  f.state.reviews = [{ job_id: f.job.id, action: "submitted" }];
+  assert.equal(f.label(), "Submission recorded");
+});
 test("posting age warnings never claim that a recent posting is live", () => {
   for (const date of [undefined, "invalid", "2026-11-11T12:00:00Z", "2026-12-01T12:00:00Z"]) assert.equal(postingNeedsRecheck(date, now), true);
   assert.equal(postingNeedsRecheck(new Date(now).toISOString(), now), false);

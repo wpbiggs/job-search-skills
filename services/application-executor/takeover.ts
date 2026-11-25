@@ -32,7 +32,8 @@ export class FixtureTakeoverDriver implements TakeoverDriver {
       } finally { await cdp.detach(); }
     } catch {
       // No capability has been released; keep idle timeout as a secondary bound if the close fails.
-      await browser.close().catch(() => {}); this.browsers.delete(sessionId);
+      try { await browser.close(); this.browsers.delete(sessionId); }
+      catch { /* Retain the cached connection for the controller/alarm's next close attempt. */ }
       throw Error("Fictional takeover browser setup failed");
     }
   }

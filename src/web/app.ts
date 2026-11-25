@@ -5,6 +5,7 @@ import type { RecordRow, WorkspaceStore } from "../store.ts";
 import { mountHandoffs } from "./handoffs.ts";
 import type { Handoff } from "../submissions.ts";
 import { mountExecutor } from "./executor.ts";
+import { applicationsView } from "./applications.ts";
 
 type State = { user: { name: string; created_at: string }; usage: Awaited<ReturnType<WorkspaceStore["usage"]>>; records: RecordRow[]; handoffs: Handoff[]; reviews: { job_id: string; action: string; draft_id: string; draft_revision: number; destination: string; confirmation: string; current: boolean; updated_at: string }[]; outcomes: { job_id: string; status: string; note: string; next_action_at: string | null; updated_at: string }[]; connections: { id: string; clientId: string; scope: string[]; current: boolean }[] };
 type Evidence = { id: string; claim: string; source: string; confirmed: boolean };
@@ -65,12 +66,18 @@ function recoveryBanner(): string {
 }
 function render() {
   if (!state) return signInView();
-  const labels: Record<string, string> = { overview: "Overview", profile: "My profile", jobs: "Jobs & drafts", connect: "Connect my AI", privacy: "Activity & privacy" };
+  const labels: Record<string, string> = { overview: "Overview", applications: "Applications", profile: "My profile", jobs: "Jobs & drafts", connect: "Connect my AI", privacy: "Activity & privacy" };
   root.innerHTML = `<div class="toolbar"><div><p class="eyebrow">Your private workspace</p><h1>${esc(state.user.name)}</h1></div><div class="actions"><button id="refresh" class="secondary">Refresh records</button><button id="logout" class="secondary">Sign out</button></div></div>${recoveryBanner()}<nav class="tabs" aria-label="Workspace sections">${Object.entries(labels).map(([key, label]) => `<button data-tab="${key}" ${tab === key ? 'aria-current="page"' : ""}>${label}</button>`).join("")}</nav><div id="section">${tab === "overview" ? overviewView() : tab === "profile" ? profileView() : tab === "jobs" ? jobsView() : tab === "connect" ? connectView() : privacyView()}</div>`;
   document.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach(button => button.onclick = () => { tab = button.dataset.tab!; void busy(refresh); });
   document.querySelector<HTMLButtonElement>("#refresh")!.onclick = () => void busy(refresh);
   document.querySelector<HTMLButtonElement>("#logout")!.onclick = () => void busy(async () => { await api("auth/logout", "POST", {}); state = null; recoveryCode = ""; signInView(); });
   document.querySelector<HTMLButtonElement>("#saved-recovery")?.addEventListener("click", () => { recoveryCode = ""; void refresh(); });
+  if (tab === "applications") document.querySelector("#section")!.innerHTML = applicationsView(state);
+  if (tab === "overview") {
+    const next = document.createElement("section"); next.className = "box";
+    next.innerHTML = '<h2>Turn preparation into an application</h2><p>Review your saved materials, open the employer form yourself and record its confirmation. A daily search report does not submit applications.</p><button data-go="applications">Start an application</button>';
+    document.querySelector("#section")!.prepend(next);
+  }
   wireSection();
 }
 function overviewView(): string {
@@ -112,6 +119,9 @@ function privacyPolicyView(): string {
   return `<section class="box"><h2>Private, not invisible to the host</h2><p>Profile, job, draft, review, and activity records are stored in a dedicated Cloudflare D1 database. Passkey public keys and hashed recovery/session credentials are stored for authentication; OAuth client grants live in a separate namespace. We do not store your passkey private key or biometric data.</p><p>This is not end-to-end encrypted storage: hosting administrators can access records. Connected assistants can read only the scopes you approve, but their providers have separate processing and retention policies. No inference runs here, and no employer receives anything from this service.</p><p>Keep secrets, government IDs, financial information, and confidential employer documents out. Limits: 250 records, 64 KiB per record, 2 MiB total. Up to 200 minimal activity events are retained; they do not contain draft bodies.</p><div class="actions"><a class="button" href="/job-search/api/export" download="job-search-workspace.json">Export my workspace</a><button id="add-passkey" class="secondary">Add another passkey</button></div><p class="muted">An export contains personal data. Save it privately. It excludes authentication credentials and tokens. Passkeys are specific to this site; a self-hosted deployment needs its own passkeys.</p></section><section class="box"><h2>Delete a record</h2><p>You can delete a job and its related records, or an individual draft or interview note, under Jobs &amp; drafts. Export first if you want to keep a copy.</p></section><section class="box"><h2>Activity you can inspect</h2><div id="activity"><p class="muted">Loading activity…</p></div></section><section class="box"><h2>Delete my workspace</h2><p>Deletes the active profile, jobs, drafts, reviews, activity, passkeys, recovery code, and sessions. Assistant access is revoked. This cannot erase exports or copies held by your assistant; hosting backups may persist for their retention period.</p><button id="delete-workspace" class="danger">Delete my entire workspace</button><p><a href="https://github.com/wpbiggs/job-search-skills/blob/main/docs/HOSTED_WORKSPACE.md">Full storage, retention, and self-hosting details ↗</a></p></section>`;
 }
 function wireSection() {
+  document.querySelectorAll<HTMLButtonElement>("[data-application-job]").forEach(button => button.onclick = () => {
+    selectedJob = button.dataset.applicationJob!; tab = "jobs"; render();
+  });
   if (tab === "privacy") {
     const section = document.createElement("section"); section.className = "box";
     section.innerHTML = "<h2>Application handoff history</h2><p>Up to 250 handoffs per account store record identities/revisions, destination, content digest, status, timestamps and an optional candidate-reported receipt (500 characters). This separate metadata is not counted in preparation byte usage. It is included in your export and can be read by assistants you authorize. Do not put secrets in receipt notes.</p><p>Delete the linked job/draft or your workspace to erase handoff history. Removing a profile invalidates pending handoffs but does not erase their metadata. Handoffs never submit, upload or withdraw an employer application.</p>";

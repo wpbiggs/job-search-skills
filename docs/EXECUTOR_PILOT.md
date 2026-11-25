@@ -6,6 +6,19 @@ This increment is **not completion of issue #2**. It adds a separate private Bro
 
 Do not report `fixture_verified` as an application, employer contact, or delivery receipt. No state in the new executor schema represents a real submission. The existing candidate-operated manual handoffs are unchanged.
 
+## Start applying with candidate-operated handoffs
+
+The **Applications** tab is the usable submission path while live cloud execution remains locked. It is not an ATS adapter or a claim that issue #2 is complete.
+
+1. Sign in at `/job-search/workspace` using your existing passkey. Confirm your own evidence under **My profile**; an assistant cannot confirm it for you.
+2. Choose **Start an application** / **Applications**. The queue distinguishes missing drafts, unconfirmed evidence, profile changes, approved handoffs, opened/uncertain handoffs and candidate-reported submissions/outcomes. Readiness only means materials can be reviewed, not that a vacancy is live or the role suits you.
+3. Open the job's next steps and recheck its employer posting. Dates older than seven days, future dates and invalid dates receive a recheck warning. A recent recorded date is not independent verification either.
+4. Review the exact saved document and destination, then use **Download reviewed text (.txt)** if useful. The local download contains that snapshot, never unsaved editor contents. It is not a PDF or an approval; an employer may require a different format. Nothing is uploaded to an employer by downloading.
+5. Approve the 15-minute manual handoff and open its one-use employer link. You perform the uploads, answers, authentication, legal consents and final submission on the employer's site. Stop and recheck if the role or destination changes.
+6. Return to **Jobs & drafts**, refresh records and record the confirmation only after personally submitting and seeing the employer confirmation. If a handoff was opened but the result is unknown, reconcile it before trying again. Candidate reports are labeled as such, never independently verified provider receipts.
+
+Shared ChatGPT reports and schedules are not synchronized by reading a shared URL. Their assistant must actually connect to this workspace's MCP with the candidate's OAuth grant and save records; connecting does not start a schedule or authorize submissions. Do not import guessed evidence or approve records on the candidate's behalf to make a queue appear ready.
+
 ## Components and enforcement
 
 - `services/application-executor/`: `job-application-executor`, with Browser Run and the existing dedicated D1 binding; **no routes, workers.dev or version preview URLs**. Its only channel is a Cloudflare account-scoped service binding from `job-search-workspace`. No new bearer secrets are needed or exposed in frontend code.

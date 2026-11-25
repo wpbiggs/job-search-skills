@@ -27,6 +27,19 @@ export async function mountHandoffs(section: Element, jobId: string, drafts: Rec
       await api("handoffs/approve", "POST", { job_id: jobId, draft_id: snapshot.draft_id, expected_digest: snapshot.payload_digest, confirmation: "APPROVE MANUAL HANDOFF" });
       await refresh();
     }));
+    const download = document.createElement("button"); download.className = "secondary";
+    download.textContent = "Download reviewed text (.txt)";
+    download.addEventListener("click", () => {
+      // Exact snapshot bytes, never unsaved editor contents. Local download only; no employer request.
+      const blob = new Blob([snapshot.content], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob), link = document.createElement("a");
+      link.href = url; link.download = `reviewed-${snapshot.draft_type}-v${snapshot.draft_revision}.txt`;
+      document.body.append(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+    const note = document.createElement("p"); note.className = "muted";
+    note.textContent = "Downloads this exact saved version, not unsaved edits. This is plain text, not a PDF or approval. Keep it private and check the employer’s accepted formats before uploading. Downloading does not contact the employer.";
+    output.append(download, note);
   }));
   box.querySelectorAll<HTMLButtonElement>("[data-handoff-open]").forEach(button => button.addEventListener("click", () => void busy(async () => {
     const { destination } = await api<{ destination: string }>("handoffs/action", "POST", { id: button.dataset.handoffOpen, action: "open" });
